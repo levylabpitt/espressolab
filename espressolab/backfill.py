@@ -1,6 +1,8 @@
-"""One-off / catch-up script: pages through every shot Decaid knows about and
-ingests it. Useful for the initial load of shot history that predates this
-system, or to recover from the logger service being down for a while.
+"""Pages through Decaid's shot history and ingests it. `ingest_shot` is
+idempotent (delete-then-insert), so re-running this over shots we already
+have is always safe — that's what makes it useful both as a one-off initial
+load and as a periodic catch-up sweep (see logger.py) for whatever the live
+WebSocket listener missed, e.g. while the database was unreachable.
 
 Usage:
     python -m espressolab.backfill
@@ -21,16 +23,16 @@ log = logging.getLogger("espressolab.backfill")
 PAGE_SIZE = 50
 
 
-async def run_backfill() -> None:
-    settings = get_settings()
-    engine = await get_engine(settings)
-    client = DecaidClient(settings)
-
+async def catch_up(engine, client: DecaidClient, decaid_rest_base: str, *, page_size: int = PAGE_SIZE, max_pages: int | None = None) -> int:
+    """Ingests shots from Decaid's history, most recent first. With
+    max_pages=None, walks the entire history (initial backfill); with
+    max_pages=1, just the most recent page (periodic catch-up sweep)."""
     ingested = 0
     offset = 0
-    async with httpx.AsyncClient(base_url=settings.decaid_rest_base, timeout=15) as http:
-        while True:
-            resp = await http.get("/api/v1/shots", params={"limit": PAGE_SIZE, "offset": offset})
+    pages = 0
+    async with httpx.AsyncClient(base_url=decaid_rest_base, timeout=15) as http:
+        while max_pages is None or pages < max_pages:
+            resp = await http.get("/api/v1/shots", params={"limit": page_size, "offset": offset})
             resp.raise_for_status()
             page = resp.json()
             items = page["items"]
@@ -42,9 +44,19 @@ async def run_backfill() -> None:
                 shot = await client.get_shot(shot_id)
                 await ingest_shot(engine, shot)
                 ingested += 1
-                log.info("Backfilled shot %s (%d so far)", shot_id, ingested)
 
-            offset += PAGE_SIZE
+            offset += page_size
+            pages += 1
+
+    return ingested
+
+
+async def run_backfill() -> None:
+    settings = get_settings()
+    engine = await get_engine(settings)
+    client = DecaidClient(settings)
+
+    ingested = await catch_up(engine, client, settings.decaid_rest_base)
 
     log.info("Backfill complete: %d shots ingested", ingested)
     await close_engine()

@@ -10,6 +10,7 @@ import os
 import httpx
 import websockets
 
+from .backfill import catch_up
 from .config import Settings, get_settings
 from .db import get_engine
 from .decaid_client import DecaidClient
@@ -20,6 +21,14 @@ log = logging.getLogger("espressolab.logger")
 RECONNECT_DELAY_SECONDS = 5
 FETCH_RETRY_ATTEMPTS = 5
 FETCH_RETRY_DELAY_SECONDS = 1
+
+# Belt-and-suspenders recovery: independent of the live WebSocket listener
+# above, periodically re-check Decaid's own recent shot history and re-ingest
+# it. ingest_shot is idempotent, so this is a harmless no-op for shots we
+# already have — it only matters for whatever the live path missed (the
+# database was down, this process itself was down, a frame got dropped...).
+CATCHUP_INTERVAL_SECONDS = 600
+CATCHUP_PAGE_SIZE = 20
 
 # Frame types/states that plausibly mean "this shot just concluded". We don't
 # rely on a single exact frame shape here — Decaid's shotId can go null again
@@ -106,9 +115,21 @@ async def _handle_event(engine, client: DecaidClient, raw_message: str, conn_sta
     await _ingest(engine, client, target_id)
 
 
+async def _catchup_loop(engine, client: DecaidClient, settings: Settings) -> None:
+    while True:
+        await asyncio.sleep(CATCHUP_INTERVAL_SECONDS)
+        try:
+            count = await catch_up(engine, client, settings.decaid_rest_base, page_size=CATCHUP_PAGE_SIZE, max_pages=1)
+            log.info("Catch-up sweep: checked last %d shots (re-ingest is a no-op for ones we already had)", count)
+        except Exception:
+            log.exception("Catch-up sweep failed, will retry in %ss", CATCHUP_INTERVAL_SECONDS)
+
+
 async def run_logger(settings: Settings) -> None:
     engine = await get_engine(settings)
     client = DecaidClient(settings)
+
+    asyncio.create_task(_catchup_loop(engine, client, settings))
 
     while True:
         try:
