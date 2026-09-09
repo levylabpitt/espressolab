@@ -3,7 +3,7 @@
     {
       "name": "DS_POSTGRES",
       "label": "espressolab Postgres",
-      "description": "Postgres+TimescaleDB datasource pointing at the espressolab database",
+      "description": "Postgres datasource pointing at the espressolab database",
       "type": "datasource",
       "pluginId": "postgres",
       "pluginName": "PostgreSQL"
@@ -16,8 +16,9 @@
   "title": "espressolab overview",
   "uid": "espressolab-overview",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
+  "style": "dark",
   "timezone": "browser",
   "time": { "from": "now-30d", "to": "now" },
   "refresh": "1m",
@@ -41,6 +42,15 @@
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "#d9a05b", "value": null }] }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
@@ -52,11 +62,43 @@
     },
     {
       "id": 2,
-      "title": "Avg shot duration (30d)",
+      "title": "Shots this week",
       "type": "stat",
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
       "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
-      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "#6f9e6f", "value": null }] }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT count(*) AS shots_week FROM shots WHERE started_at >= now() - interval '7 days'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Avg shot duration (30d)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "#5b8fd9", "value": null }] }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
@@ -67,26 +109,37 @@
       ]
     },
     {
-      "id": 3,
-      "title": "Most active this week",
-      "type": "table",
-      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 0 },
+      "id": 4,
+      "title": "Active people (30d)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "#b085d9", "value": null }] }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "auto" },
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '7 days' GROUP BY 1 ORDER BY shots DESC LIMIT 10",
+          "rawSql": "SELECT count(DISTINCT coalesce(u.id::text, s.drinker_name)) AS active_people FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '30 days'",
           "refId": "A"
         }
       ]
     },
     {
-      "id": 4,
-      "title": "Shots per day",
+      "id": 5,
+      "title": "Shots per day (30d)",
       "type": "barchart",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "#d9a05b" } } },
+      "options": { "legend": { "showLegend": false } },
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
@@ -97,11 +150,15 @@
       ]
     },
     {
-      "id": 5,
+      "id": 6,
       "title": "Shots per person (30d)",
       "type": "piechart",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "options": {
+        "pieType": "donut",
+        "legend": { "showLegend": true, "placement": "right", "values": ["value", "percent"] }
+      },
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
@@ -112,11 +169,76 @@
       ]
     },
     {
-      "id": 6,
-      "title": "Selected shot: pressure / flow / weight",
-      "type": "timeseries",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "id": 7,
+      "title": "Most active this week",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 12 },
       "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "options": { "cellHeight": "sm" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "shots" },
+            "properties": [{ "id": "custom.cellOptions", "value": { "type": "gauge", "mode": "gradient" } }, { "id": "max", "value": null }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '7 days' GROUP BY 1 ORDER BY shots DESC LIMIT 10",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Selected shot: pressure / flow / weight",
+      "description": "Pick a shot from the \"Shot\" dropdown above to see its full pull curve.",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 5, "axisPlacement": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "pressure" },
+            "properties": [{ "id": "displayName", "value": "Pressure (bar)" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "target_pressure" },
+            "properties": [
+              { "id": "displayName", "value": "Target pressure" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "flow" },
+            "properties": [{ "id": "displayName", "value": "Flow (ml/s)" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "#5b8fd9" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "target_flow" },
+            "properties": [
+              { "id": "displayName", "value": "Target flow" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#5b8fd9" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "weight" },
+            "properties": [
+              { "id": "displayName", "value": "Weight (g)" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#6f9e6f" } },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "custom.fillOpacity", "value": 15 }
+            ]
+          }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
@@ -127,11 +249,24 @@
       ]
     },
     {
-      "id": 7,
+      "id": 9,
       "title": "Recent shots",
       "type": "table",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 28 },
       "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "options": { "cellHeight": "sm" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "target_dose_weight" }, "properties": [{ "id": "unit", "value": "g" }, { "id": "displayName", "value": "Dose" }] },
+          { "matcher": { "id": "byName", "options": "actual_yield" }, "properties": [{ "id": "unit", "value": "g" }, { "id": "displayName", "value": "Yield" }] },
+          { "matcher": { "id": "byName", "options": "duration_seconds" }, "properties": [{ "id": "unit", "value": "s" }, { "id": "displayName", "value": "Duration" }] },
+          { "matcher": { "id": "byName", "options": "drink_tds" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "displayName", "value": "TDS" }] },
+          { "matcher": { "id": "byName", "options": "drink_ey" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "displayName", "value": "EY" }] },
+          { "matcher": { "id": "byName", "options": "person" }, "properties": [{ "id": "custom.width", "value": 140 }] },
+          { "matcher": { "id": "byName", "options": "started_at" }, "properties": [{ "id": "displayName", "value": "When" }, { "id": "custom.width", "value": 180 }] }
+        ]
+      },
       "targets": [
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
