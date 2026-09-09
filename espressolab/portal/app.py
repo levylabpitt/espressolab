@@ -52,9 +52,17 @@ _STRIPPED_PROXY_HEADERS = {
     "connection",
 }
 
+# A Flutter web build is dozens of files (JS, wasm, fonts, assets). Reuse one
+# connection-pooled client across all of them instead of opening a fresh TCP
+# connection per file — that was the main source of the slow first load.
+_proxy_client: httpx.AsyncClient | None = None
+
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    global _proxy_client
+    _proxy_client = httpx.AsyncClient(follow_redirects=True, timeout=15)
+
     await get_engine(settings)
     client = DecaidClient(settings)
     try:
@@ -64,6 +72,12 @@ async def on_startup() -> None:
             await client.start_webui()
     except httpx.HTTPError:
         log.warning("Could not reach Decaid at %s yet (is it running?)", settings.decaid_rest_base)
+
+
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    if _proxy_client is not None:
+        await _proxy_client.aclose()
 
 
 async def get_active_users():
@@ -186,8 +200,7 @@ async def _proxy_to_decaid(upstream_path: str, query: str = "") -> Response:
     if query:
         target += f"?{query}"
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
-            upstream = await client.get(target)
+        upstream = await _proxy_client.get(target)
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Could not reach Decaid's WebUI server")
 
