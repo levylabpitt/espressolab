@@ -22,7 +22,12 @@ async def get_engine(settings: Settings) -> AsyncEngine:
     global _engine
     if _engine is None:
         url = _normalize_url(settings.database_url)
-        engine = create_async_engine(url)
+        # pool_pre_ping: check a pooled connection is still alive before handing
+        # it out, instead of finding out mid-query ("connection is closed") —
+        # matters over a network connection to a remote server, which can drop
+        # idle connections without us knowing. pool_recycle: also proactively
+        # replace connections before they get that old in the first place.
+        engine = create_async_engine(url, pool_pre_ping=True, pool_recycle=1800)
 
         if engine.dialect.name == "sqlite":
             @event.listens_for(engine.sync_engine, "connect")
