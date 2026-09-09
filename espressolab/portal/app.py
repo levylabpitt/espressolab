@@ -14,7 +14,7 @@ from pathlib import Path
 import httpx
 import sqlalchemy as sa
 from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -37,6 +37,20 @@ settings: Settings = get_settings()
 basic_auth = HTTPBasic()
 
 USER_COOKIE = "espressolab_user"
+
+# Decaid's WebUI sends X-Frame-Options: SAMEORIGIN, which blocks framing it
+# from our own origin (different port = different origin). So instead of
+# pointing the iframe straight at it, we proxy it through this origin — same
+# trick browsers extensions use — and drop the header on the way through.
+DECAID_PROXY_ENTRY = "dw"
+_STRIPPED_PROXY_HEADERS = {
+    "x-frame-options",
+    "content-security-policy",
+    "content-length",
+    "content-encoding",
+    "transfer-encoding",
+    "connection",
+}
 
 
 @app.on_event("startup")
@@ -78,6 +92,7 @@ async def home(request: Request, espressolab_user: str | None = Cookie(default=N
                     "request": request,
                     "user": user,
                     "decaid_webui_url": DecaidClient(settings).webui_url,
+                    "decaid_proxy_url": f"/{DECAID_PROXY_ENTRY}",
                 },
             )
 
@@ -160,3 +175,36 @@ async def admin_delete_user(user_id: str):
     async with engine.begin() as conn:
         await conn.execute(sa.delete(users).where(users.c.id == user_id))
     return RedirectResponse(url="/admin", status_code=303)
+
+
+# --- Decaid WebUI reverse proxy ---------------------------------------------
+# Registered last so it only catches requests no route above already claimed.
+
+
+async def _proxy_to_decaid(upstream_path: str, query: str = "") -> Response:
+    target = f"{settings.decaid_webui_base}/{upstream_path}"
+    if query:
+        target += f"?{query}"
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+            upstream = await client.get(target)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Could not reach Decaid's WebUI server")
+
+    headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _STRIPPED_PROXY_HEADERS}
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        headers=headers,
+        media_type=upstream.headers.get("content-type"),
+    )
+
+
+@app.get(f"/{DECAID_PROXY_ENTRY}")
+async def decaid_webui_entry():
+    return await _proxy_to_decaid("")
+
+
+@app.get("/{path:path}")
+async def decaid_webui_asset_proxy(path: str, request: Request):
+    return await _proxy_to_decaid(path, str(request.url.query))
