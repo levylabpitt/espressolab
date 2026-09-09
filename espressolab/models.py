@@ -14,7 +14,7 @@ def _uuid() -> str:
 
 
 users = sa.Table(
-    "users",
+    "espresso_users",
     metadata,
     sa.Column("id", sa.String, primary_key=True, default=_uuid),
     sa.Column("display_name", sa.String, nullable=False, unique=True),
@@ -28,10 +28,10 @@ users = sa.Table(
 # (GET /api/v1/shots/{id}). Attribution comes from workflow.context, set by
 # the portal via PUT /api/v1/workflow before the shot starts.
 shots = sa.Table(
-    "shots",
+    "espresso_shots",
     metadata,
     sa.Column("id", sa.String, primary_key=True),  # Decaid's own shot id
-    sa.Column("user_id", sa.String, sa.ForeignKey("users.id", ondelete="SET NULL")),
+    sa.Column("user_id", sa.String, sa.ForeignKey("espresso_users.id", ondelete="SET NULL")),
     sa.Column("drinker_name", sa.String),
     sa.Column("barista_name", sa.String),
     sa.Column("started_at", sa.DateTime, nullable=False),
@@ -57,15 +57,15 @@ shots = sa.Table(
     sa.Column("raw_workflow", sa.JSON),
     sa.Column("raw_annotations", sa.JSON),
     sa.Column("ingested_at", sa.DateTime, nullable=False, server_default=sa.func.now()),
-    sa.Index("idx_shots_user_id", "user_id"),
-    sa.Index("idx_shots_started_at", "started_at"),
+    sa.Index("idx_espresso_shots_user_id", "user_id"),
+    sa.Index("idx_espresso_shots_started_at", "started_at"),
 )
 
 # Per-snapshot telemetry for a shot (pressure/flow/temperature/weight curves).
 shot_samples = sa.Table(
-    "shot_samples",
+    "espresso_shot_samples",
     metadata,
-    sa.Column("shot_id", sa.String, sa.ForeignKey("shots.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("shot_id", sa.String, sa.ForeignKey("espresso_shots.id", ondelete="CASCADE"), nullable=False),
     sa.Column("sample_time", sa.DateTime, nullable=False),
     sa.Column("seq", sa.Integer, nullable=False),  # ordinal within the shot, breaks timestamp ties
     sa.Column("elapsed_seconds", sa.Float),  # seconds since shot start
@@ -85,5 +85,5 @@ shot_samples = sa.Table(
     sa.Column("weight_flow", sa.Float),
     sa.Column("volume", sa.Float),
     sa.PrimaryKeyConstraint("shot_id", "sample_time", "seq"),
-    sa.Index("idx_shot_samples_shot_id", "shot_id"),
+    sa.Index("idx_espresso_shot_samples_shot_id", "shot_id"),
 )

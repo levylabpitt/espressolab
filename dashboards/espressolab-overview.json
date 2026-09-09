@@ -29,7 +29,7 @@
         "type": "query",
         "label": "Shot",
         "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
-        "query": "SELECT id AS __value, started_at::text || '  ·  ' || coalesce(drinker_name, 'unattributed') AS __text FROM shots ORDER BY started_at DESC LIMIT 50",
+        "query": "SELECT id AS __value, started_at::text || '  ·  ' || coalesce(drinker_name, 'unattributed') AS __text FROM espresso_shots ORDER BY started_at DESC LIMIT 50",
         "refresh": 2,
         "current": {}
       }
@@ -55,7 +55,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT count(*) AS shots_today FROM shots WHERE started_at >= date_trunc('day', now())",
+          "rawSql": "SELECT count(*) AS shots_today FROM espresso_shots WHERE started_at >= date_trunc('day', now())",
           "refId": "A"
         }
       ]
@@ -79,7 +79,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT count(*) AS shots_week FROM shots WHERE started_at >= now() - interval '7 days'",
+          "rawSql": "SELECT count(*) AS shots_week FROM espresso_shots WHERE started_at >= now() - interval '7 days'",
           "refId": "A"
         }
       ]
@@ -103,7 +103,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT avg(duration_seconds) AS avg_duration FROM shots WHERE started_at >= now() - interval '30 days'",
+          "rawSql": "SELECT avg(duration_seconds) AS avg_duration FROM espresso_shots WHERE started_at >= now() - interval '30 days'",
           "refId": "A"
         }
       ]
@@ -127,7 +127,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT count(DISTINCT coalesce(u.id::text, s.drinker_name)) AS active_people FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '30 days'",
+          "rawSql": "SELECT count(DISTINCT coalesce(u.id::text, s.drinker_name)) AS active_people FROM espresso_shots s LEFT JOIN espresso_users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '30 days'",
           "refId": "A"
         }
       ]
@@ -144,7 +144,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT date_trunc('day', started_at)::date AS day, count(*) AS shots FROM shots WHERE started_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT date_trunc('day', started_at)::date AS day, count(*) AS shots FROM espresso_shots WHERE started_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ]
@@ -163,7 +163,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '30 days' GROUP BY 1 ORDER BY shots DESC",
+          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM espresso_shots s LEFT JOIN espresso_users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '30 days' GROUP BY 1 ORDER BY shots DESC",
           "refId": "A"
         }
       ]
@@ -188,7 +188,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '7 days' GROUP BY 1 ORDER BY shots DESC LIMIT 10",
+          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM espresso_shots s LEFT JOIN espresso_users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '7 days' GROUP BY 1 ORDER BY shots DESC LIMIT 10",
           "refId": "A"
         }
       ]
@@ -243,7 +243,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "time_series",
-          "rawSql": "SELECT sample_time AS time, pressure, target_pressure, flow, target_flow, weight FROM shot_samples WHERE shot_id = '$shot_id' ORDER BY sample_time",
+          "rawSql": "SELECT sample_time AS time, pressure, target_pressure, flow, target_flow, weight FROM espresso_shot_samples WHERE shot_id = '$shot_id' ORDER BY sample_time",
           "refId": "A"
         }
       ]
@@ -271,7 +271,7 @@
         {
           "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
           "format": "table",
-          "rawSql": "SELECT s.started_at, coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, s.coffee_name, s.coffee_roaster, s.target_dose_weight, s.actual_yield, s.duration_seconds, s.drink_tds, s.drink_ey, s.enjoyment, s.espresso_notes FROM shots s LEFT JOIN users u ON u.id = s.user_id ORDER BY s.started_at DESC LIMIT 100",
+          "rawSql": "SELECT s.started_at, coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, s.coffee_name, s.coffee_roaster, s.target_dose_weight, s.actual_yield, s.duration_seconds, s.drink_tds, s.drink_ey, s.enjoyment, s.espresso_notes FROM espresso_shots s LEFT JOIN espresso_users u ON u.id = s.user_id ORDER BY s.started_at DESC LIMIT 100",
           "refId": "A"
         }
       ]
