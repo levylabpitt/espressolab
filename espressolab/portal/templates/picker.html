@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>espressolab</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="picker">
+    <h1>Who's brewing?</h1>
+    {% if users %}
+    <div class="grid">
+      {% for user in users %}
+      <form method="post" action="/select/{{ user['id'] }}">
+        <button type="submit" class="user-card">
+          <span class="avatar" style="background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span>
+          <span>{{ user['display_name'] }}</span>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      No lab members yet. Add people from <a href="/admin" style="color: var(--accent);">/admin</a>.
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

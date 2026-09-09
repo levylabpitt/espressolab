@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>espressolab admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="admin">
+    <h1>Lab members</h1>
+    <table>
+      <thead>
+        <tr><th>Avatar</th><th>Name</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td><span class="avatar" style="width:34px;height:34px;font-size:1.1rem;background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span></td>
+          <td>{{ user['display_name'] }}</td>
+          <td><span class="badge {{ 'active' if user['active'] else 'inactive' }}">{{ 'active' if user['active'] else 'hidden' }}</span></td>
+          <td>
+            <form class="inline" method="post" action="/admin/users/{{ user['id'] }}/toggle">
+              <button type="submit">{{ 'Hide' if user['active'] else 'Unhide' }}</button>
+            </form>
+            <form class="inline" method="post" action="/admin/users/{{ user['id'] }}/delete" onsubmit="return confirm('Delete {{ user['display_name'] }}? Their past shots stay logged, just unlinked.');">
+              <button type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Add a lab member</h2>
+    <form method="post" action="/admin/users">
+      <input type="text" name="display_name" placeholder="Name" required />
+      <input type="text" name="avatar_emoji" placeholder="Emoji" value="☕" style="width: 60px;" />
+      <input type="color" name="avatar_color" value="#6f4e37" />
+      <input type="submit" value="Add" />
+    </form>
+  </div>
+</body>
+</html>

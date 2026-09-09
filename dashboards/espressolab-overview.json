@@ -1,0 +1,145 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_POSTGRES",
+      "label": "espressolab Postgres",
+      "description": "Postgres+TimescaleDB datasource pointing at the espressolab database",
+      "type": "datasource",
+      "pluginId": "postgres",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "postgres", "name": "PostgreSQL", "version": "1.0.0" }
+  ],
+  "title": "espressolab overview",
+  "uid": "espressolab-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-30d", "to": "now" },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "shot_id",
+        "type": "query",
+        "label": "Shot",
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+        "query": "SELECT id AS __value, started_at::text || '  ·  ' || coalesce(drinker_name, 'unattributed') AS __text FROM shots ORDER BY started_at DESC LIMIT 50",
+        "refresh": 2,
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Shots today",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT count(*) AS shots_today FROM shots WHERE started_at >= date_trunc('day', now())",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Avg shot duration (30d)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT avg(duration_seconds) AS avg_duration FROM shots WHERE started_at >= now() - interval '30 days'",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Most active this week",
+      "type": "table",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '7 days' GROUP BY 1 ORDER BY shots DESC LIMIT 10",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Shots per day",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT date_trunc('day', started_at)::date AS day, count(*) AS shots FROM shots WHERE started_at >= now() - interval '30 days' GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Shots per person (30d)",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, count(*) AS shots FROM shots s LEFT JOIN users u ON u.id = s.user_id WHERE s.started_at >= now() - interval '30 days' GROUP BY 1 ORDER BY shots DESC",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Selected shot: pressure / flow / weight",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "time_series",
+          "rawSql": "SELECT sample_time AS time, pressure, target_pressure, flow, target_flow, weight FROM shot_samples WHERE shot_id = '$shot_id' ORDER BY sample_time",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Recent shots",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "format": "table",
+          "rawSql": "SELECT s.started_at, coalesce(u.display_name, s.drinker_name, 'unattributed') AS person, s.coffee_name, s.coffee_roaster, s.target_dose_weight, s.actual_yield, s.duration_seconds, s.drink_tds, s.drink_ey, s.enjoyment, s.espresso_notes FROM shots s LEFT JOIN users u ON u.id = s.user_id ORDER BY s.started_at DESC LIMIT 100",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>espressolab</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="brew-bar">
+    <div class="who">
+      <span class="avatar" style="background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span>
+      <span>Brewing as <strong>{{ user['display_name'] }}</strong></span>
+    </div>
+    <div class="who">
+      <a href="{{ decaid_webui_url }}" target="_blank" rel="noopener" style="color: var(--muted); font-size: 0.9rem;">Open in new window ↗</a>
+      <form method="post" action="/switch">
+        <button type="submit">Switch user</button>
+      </form>
+    </div>
+  </div>
+  <iframe class="decaid" src="{{ decaid_webui_url }}"></iframe>
+</body>
+</html>
