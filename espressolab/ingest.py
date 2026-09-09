@@ -2,40 +2,50 @@
 in `shots` and `shot_samples`."""
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
-import asyncpg
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+
+from .models import shot_samples, shots, users
 
 _FRACTIONAL_SECONDS_RE = re.compile(r"(\.\d{6})\d+")
 
 
 def _parse_dt(value: str | None) -> datetime | None:
+    """Parses an ISO8601 timestamp to a naive UTC datetime (so it stores the
+    same way on SQLite, which has no timezone-aware type, and Postgres)."""
     if not value:
         return None
     text = value.replace("Z", "+00:00")
     # datetime.fromisoformat only accepts up to microsecond precision;
     # truncate anything more precise than that instead of raising.
     text = _FRACTIONAL_SECONDS_RE.sub(r"\1", text)
-    return datetime.fromisoformat(text)
+    dt = datetime.fromisoformat(text)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
-async def _resolve_user_id(conn: asyncpg.Connection, *, extras: dict, drinker_name: str | None) -> str | None:
+async def _resolve_user_id(conn: AsyncConnection, *, extras: dict, drinker_name: str | None) -> str | None:
     candidate = (extras or {}).get("espressolab_user_id")
     if candidate:
-        row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", candidate)
+        result = await conn.execute(sa.select(users.c.id).where(users.c.id == candidate))
+        row = result.first()
         if row:
-            return str(row["id"])
+            return row[0]
     if drinker_name:
-        row = await conn.fetchrow(
-            "SELECT id FROM users WHERE lower(display_name) = lower($1)", drinker_name
+        result = await conn.execute(
+            sa.select(users.c.id).where(sa.func.lower(users.c.display_name) == drinker_name.lower())
         )
+        row = result.first()
         if row:
-            return str(row["id"])
+            return row[0]
     return None
 
 
-async def ingest_shot(pool: asyncpg.Pool, shot: dict) -> str:
-    """Upserts a single shot and its samples. Returns the shot id."""
+async def ingest_shot(engine: AsyncEngine, shot: dict) -> str:
+    """Replaces a shot and its samples. Returns the shot id."""
     shot_id = shot["id"]
     workflow = shot.get("workflow") or {}
     context = workflow.get("context") or {}
@@ -62,141 +72,78 @@ async def ingest_shot(pool: asyncpg.Pool, shot: dict) -> str:
     if started_at is None:
         raise ValueError(f"shot {shot_id} has no usable timestamp")
 
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            user_id = await _resolve_user_id(
-                conn, extras=extras, drinker_name=context.get("drinkerName")
+    async with engine.begin() as conn:
+        user_id = await _resolve_user_id(conn, extras=extras, drinker_name=context.get("drinkerName"))
+
+        # Delete-then-insert instead of an upsert: keeps this portable across
+        # SQLite and Postgres. ON DELETE CASCADE takes shot_samples with it.
+        await conn.execute(sa.delete(shots).where(shots.c.id == shot_id))
+
+        await conn.execute(
+            sa.insert(shots).values(
+                id=shot_id,
+                user_id=user_id,
+                drinker_name=context.get("drinkerName"),
+                barista_name=context.get("baristaName"),
+                started_at=started_at,
+                created_at_decaid=_parse_dt(shot.get("createdAt")),
+                updated_at_decaid=_parse_dt(shot.get("updatedAt")),
+                duration_seconds=duration_seconds,
+                stop_reason=shot.get("stopReason"),
+                profile_title=profile.get("title"),
+                target_dose_weight=context.get("targetDoseWeight"),
+                target_yield=context.get("targetYield"),
+                grinder_model=context.get("grinderModel"),
+                grinder_setting=context.get("grinderSetting"),
+                grinder_id=context.get("grinderId"),
+                coffee_name=context.get("coffeeName"),
+                coffee_roaster=context.get("coffeeRoaster"),
+                bean_batch_id=context.get("beanBatchId"),
+                actual_dose_weight=annotations.get("actualDoseWeight"),
+                actual_yield=annotations.get("actualYield"),
+                drink_tds=annotations.get("drinkTds"),
+                drink_ey=annotations.get("drinkEy"),
+                enjoyment=annotations.get("enjoyment"),
+                espresso_notes=annotations.get("espressoNotes"),
+                raw_workflow=workflow,
+                raw_annotations=annotations,
+            )
+        )
+
+        rows = []
+        base_time = sample_times[0] if sample_times else started_at
+        for seq, m in enumerate(measurements):
+            machine = m.get("machine") or {}
+            state = machine.get("state") or {}
+            scale = m.get("scale") or {}
+            sample_time = (
+                _parse_dt(machine.get("timestamp")) or _parse_dt(scale.get("timestamp")) or base_time
+            )
+            rows.append(
+                {
+                    "shot_id": shot_id,
+                    "sample_time": sample_time,
+                    "seq": seq,
+                    "elapsed_seconds": (sample_time - base_time).total_seconds(),
+                    "machine_state": state.get("state"),
+                    "machine_substate": state.get("substate"),
+                    "flow": machine.get("flow"),
+                    "pressure": machine.get("pressure"),
+                    "target_flow": machine.get("targetFlow"),
+                    "target_pressure": machine.get("targetPressure"),
+                    "mix_temperature": machine.get("mixTemperature"),
+                    "group_temperature": machine.get("groupTemperature"),
+                    "target_mix_temperature": machine.get("targetMixTemperature"),
+                    "target_group_temperature": machine.get("targetGroupTemperature"),
+                    "steam_temperature": machine.get("steamTemperature"),
+                    "profile_frame": machine.get("profileFrame"),
+                    "weight": scale.get("weight"),
+                    "weight_flow": scale.get("weightFlow"),
+                    "volume": m.get("volume"),
+                }
             )
 
-            await conn.execute(
-                """
-                INSERT INTO shots (
-                    id, user_id, drinker_name, barista_name, started_at,
-                    created_at_decaid, updated_at_decaid, duration_seconds, stop_reason,
-                    profile_title, target_dose_weight, target_yield,
-                    grinder_model, grinder_setting, grinder_id,
-                    coffee_name, coffee_roaster, bean_batch_id,
-                    actual_dose_weight, actual_yield, drink_tds, drink_ey, enjoyment,
-                    espresso_notes, raw_workflow, raw_annotations
-                ) VALUES (
-                    $1, $2, $3, $4, $5,
-                    $6, $7, $8, $9,
-                    $10, $11, $12,
-                    $13, $14, $15,
-                    $16, $17, $18,
-                    $19, $20, $21, $22, $23,
-                    $24, $25::jsonb, $26::jsonb
-                )
-                ON CONFLICT (id) DO UPDATE SET
-                    user_id = EXCLUDED.user_id,
-                    drinker_name = EXCLUDED.drinker_name,
-                    barista_name = EXCLUDED.barista_name,
-                    updated_at_decaid = EXCLUDED.updated_at_decaid,
-                    duration_seconds = EXCLUDED.duration_seconds,
-                    stop_reason = EXCLUDED.stop_reason,
-                    actual_dose_weight = EXCLUDED.actual_dose_weight,
-                    actual_yield = EXCLUDED.actual_yield,
-                    drink_tds = EXCLUDED.drink_tds,
-                    drink_ey = EXCLUDED.drink_ey,
-                    enjoyment = EXCLUDED.enjoyment,
-                    espresso_notes = EXCLUDED.espresso_notes,
-                    raw_workflow = EXCLUDED.raw_workflow,
-                    raw_annotations = EXCLUDED.raw_annotations
-                """,
-                shot_id,
-                user_id,
-                context.get("drinkerName"),
-                context.get("baristaName"),
-                started_at,
-                _parse_dt(shot.get("createdAt")),
-                _parse_dt(shot.get("updatedAt")),
-                duration_seconds,
-                shot.get("stopReason"),
-                profile.get("title"),
-                context.get("targetDoseWeight"),
-                context.get("targetYield"),
-                context.get("grinderModel"),
-                context.get("grinderSetting"),
-                context.get("grinderId"),
-                context.get("coffeeName"),
-                context.get("coffeeRoaster"),
-                context.get("beanBatchId"),
-                annotations.get("actualDoseWeight"),
-                annotations.get("actualYield"),
-                annotations.get("drinkTds"),
-                annotations.get("drinkEy"),
-                annotations.get("enjoyment"),
-                annotations.get("espressoNotes"),
-                _as_json(workflow),
-                _as_json(annotations),
-            )
-
-            await conn.execute("DELETE FROM shot_samples WHERE shot_id = $1", shot_id)
-
-            rows = []
-            base_time = sample_times[0] if sample_times else started_at
-            for seq, m in enumerate(measurements):
-                machine = m.get("machine") or {}
-                state = machine.get("state") or {}
-                scale = m.get("scale") or {}
-                sample_time = (
-                    _parse_dt(machine.get("timestamp"))
-                    or _parse_dt(scale.get("timestamp"))
-                    or base_time
-                )
-                elapsed = (sample_time - base_time).total_seconds()
-                rows.append(
-                    (
-                        shot_id,
-                        sample_time,
-                        seq,
-                        elapsed,
-                        state.get("state"),
-                        state.get("substate"),
-                        machine.get("flow"),
-                        machine.get("pressure"),
-                        machine.get("targetFlow"),
-                        machine.get("targetPressure"),
-                        machine.get("mixTemperature"),
-                        machine.get("groupTemperature"),
-                        machine.get("targetMixTemperature"),
-                        machine.get("targetGroupTemperature"),
-                        machine.get("steamTemperature"),
-                        machine.get("profileFrame"),
-                        scale.get("weight"),
-                        scale.get("weightFlow"),
-                        m.get("volume"),
-                    )
-                )
-
-            if rows:
-                await conn.executemany(
-                    """
-                    INSERT INTO shot_samples (
-                        shot_id, sample_time, seq, elapsed_seconds,
-                        machine_state, machine_substate,
-                        flow, pressure, target_flow, target_pressure,
-                        mix_temperature, group_temperature,
-                        target_mix_temperature, target_group_temperature,
-                        steam_temperature, profile_frame,
-                        weight, weight_flow, volume
-                    ) VALUES (
-                        $1, $2, $3, $4,
-                        $5, $6,
-                        $7, $8, $9, $10,
-                        $11, $12,
-                        $13, $14,
-                        $15, $16,
-                        $17, $18, $19
-                    )
-                    """,
-                    rows,
-                )
+        if rows:
+            await conn.execute(sa.insert(shot_samples), rows)
 
     return shot_id
-
-
-def _as_json(value: dict) -> str:
-    import json
-
-    return json.dumps(value)

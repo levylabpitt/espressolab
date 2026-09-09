@@ -12,6 +12,7 @@ import secrets
 from pathlib import Path
 
 import httpx
+import sqlalchemy as sa
 from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -19,8 +20,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from ..config import Settings, get_settings
-from ..db import get_pool
+from ..db import get_engine
 from ..decaid_client import DecaidClient
+from ..models import users
 from ..session import make_user_cookie, read_user_cookie
 
 log = logging.getLogger("espressolab.portal")
@@ -39,7 +41,7 @@ USER_COOKIE = "espressolab_user"
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    await get_pool(settings)
+    await get_engine(settings)
     client = DecaidClient(settings)
     try:
         status = await client.get_webui_status()
@@ -51,15 +53,17 @@ async def on_startup() -> None:
 
 
 async def get_active_users():
-    pool = await get_pool(settings)
-    return await pool.fetch(
-        "SELECT id, display_name, avatar_emoji, avatar_color FROM users WHERE active ORDER BY display_name"
-    )
+    engine = await get_engine(settings)
+    async with engine.connect() as conn:
+        result = await conn.execute(sa.select(users).where(users.c.active).order_by(users.c.display_name))
+        return result.mappings().all()
 
 
 async def get_user(user_id: str):
-    pool = await get_pool(settings)
-    return await pool.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+    engine = await get_engine(settings)
+    async with engine.connect() as conn:
+        result = await conn.execute(sa.select(users).where(users.c.id == user_id))
+        return result.mappings().first()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -77,8 +81,8 @@ async def home(request: Request, espressolab_user: str | None = Cookie(default=N
                 },
             )
 
-    users = await get_active_users()
-    return templates.TemplateResponse("picker.html", {"request": request, "users": users})
+    active_users = await get_active_users()
+    return templates.TemplateResponse("picker.html", {"request": request, "users": active_users})
 
 
 @app.post("/select/{user_id}")
@@ -117,11 +121,11 @@ def require_admin(credentials: HTTPBasicCredentials = Depends(basic_auth)) -> No
 
 @app.get("/admin", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
 async def admin_home(request: Request):
-    pool = await get_pool(settings)
-    users = await pool.fetch(
-        "SELECT id, display_name, avatar_emoji, avatar_color, active FROM users ORDER BY display_name"
-    )
-    return templates.TemplateResponse("admin.html", {"request": request, "users": users})
+    engine = await get_engine(settings)
+    async with engine.connect() as conn:
+        result = await conn.execute(sa.select(users).order_by(users.c.display_name))
+        all_users = result.mappings().all()
+    return templates.TemplateResponse("admin.html", {"request": request, "users": all_users})
 
 
 @app.post("/admin/users", dependencies=[Depends(require_admin)])
@@ -130,25 +134,29 @@ async def admin_create_user(
     avatar_emoji: str = Form("☕"),
     avatar_color: str = Form("#6f4e37"),
 ):
-    pool = await get_pool(settings)
-    await pool.execute(
-        "INSERT INTO users (display_name, avatar_emoji, avatar_color) VALUES ($1, $2, $3)",
-        display_name.strip(),
-        avatar_emoji.strip() or "☕",
-        avatar_color.strip() or "#6f4e37",
-    )
+    engine = await get_engine(settings)
+    async with engine.begin() as conn:
+        await conn.execute(
+            sa.insert(users).values(
+                display_name=display_name.strip(),
+                avatar_emoji=avatar_emoji.strip() or "☕",
+                avatar_color=avatar_color.strip() or "#6f4e37",
+            )
+        )
     return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.post("/admin/users/{user_id}/toggle", dependencies=[Depends(require_admin)])
 async def admin_toggle_user(user_id: str):
-    pool = await get_pool(settings)
-    await pool.execute("UPDATE users SET active = NOT active WHERE id = $1", user_id)
+    engine = await get_engine(settings)
+    async with engine.begin() as conn:
+        await conn.execute(sa.update(users).where(users.c.id == user_id).values(active=sa.not_(users.c.active)))
     return RedirectResponse(url="/admin", status_code=303)
 
 
 @app.post("/admin/users/{user_id}/delete", dependencies=[Depends(require_admin)])
 async def admin_delete_user(user_id: str):
-    pool = await get_pool(settings)
-    await pool.execute("DELETE FROM users WHERE id = $1", user_id)
+    engine = await get_engine(settings)
+    async with engine.begin() as conn:
+        await conn.execute(sa.delete(users).where(users.c.id == user_id))
     return RedirectResponse(url="/admin", status_code=303)

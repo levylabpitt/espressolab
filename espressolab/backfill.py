@@ -12,7 +12,7 @@ import logging
 import httpx
 
 from .config import get_settings
-from .db import close_pool, get_pool
+from .db import close_engine, get_engine
 from .decaid_client import DecaidClient
 from .ingest import ingest_shot
 
@@ -23,7 +23,7 @@ PAGE_SIZE = 50
 
 async def run_backfill() -> None:
     settings = get_settings()
-    pool = await get_pool(settings)
+    engine = await get_engine(settings)
     client = DecaidClient(settings)
 
     ingested = 0
@@ -40,14 +40,14 @@ async def run_backfill() -> None:
             for summary in items:
                 shot_id = summary["id"]
                 shot = await client.get_shot(shot_id)
-                await ingest_shot(pool, shot)
+                await ingest_shot(engine, shot)
                 ingested += 1
                 log.info("Backfilled shot %s (%d so far)", shot_id, ingested)
 
             offset += PAGE_SIZE
 
     log.info("Backfill complete: %d shots ingested", ingested)
-    await close_pool()
+    await close_engine()
 
 
 def main() -> None:

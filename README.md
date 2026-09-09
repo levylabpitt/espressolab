@@ -1,9 +1,12 @@
 # espressolab
 
 Logs shots pulled on the lab's Decent DE1 (via [Decaid](https://github.com/decaid-app), running
-on this touchscreen Windows PC) to Postgres+TimescaleDB, visualizes them in Grafana, and adds a
-simple "who's brewing?" profile picker in front of Decaid's own web portal so every shot gets
-attributed to a person.
+on this touchscreen Windows PC) to a database, visualizes them in Grafana, and adds a simple
+"who's brewing?" profile picker in front of Decaid's own web portal so every shot gets attributed
+to a person.
+
+Runs on SQLite by default — zero setup, just works locally. Point `DATABASE_URL` at Postgres
+(e.g. your lab server) instead when you want that; nothing else changes.
 
 ## How it fits together
 
@@ -26,7 +29,7 @@ Decaid local REST/WebSocket API (this PC, port 8080)
 espressolab logger (this PC, background service)
       │
       ▼
-Postgres + TimescaleDB (lab server)  ──►  Grafana (lab server)
+SQLite (local) or Postgres (lab server)  ──►  Grafana (if using Postgres)
 ```
 
 Decaid already exposes a full local REST/WebSocket API (see `api/rest_v1.yml` and
@@ -44,38 +47,34 @@ Two small Python services run on this Windows PC:
 - **`espressolab.logger`** — listens to Decaid's `ws/v1/machine/shotState` WebSocket; when a shot
   finishes it fetches the full record and writes it into Postgres.
 
-Postgres+TimescaleDB and Grafana are assumed to already be running on your lab server — this repo
-only needs a database created there and network access from this PC.
-
 ## One-time setup
 
-### 1. Database
-
-On the lab server, create a database (if you don't already have one you want to reuse) and run
-the schema:
-
-```bash
-psql "postgresql://<user>@<lab-server>:5432/postgres" -c "CREATE DATABASE espressolab;"
-psql "postgresql://<user>@<lab-server>:5432/espressolab" -f db/schema.sql
-```
-
-`db/schema.sql` assumes the `timescaledb` extension is already installed on that Postgres
-instance (`CREATE EXTENSION IF NOT EXISTS timescaledb;` is included, but the extension binary
-itself needs to be installed at the OS/package level — it almost certainly already is, since you
-said the server is already Postgres+Timescale).
-
-### 2. Python environment (on this Windows PC)
+### 1. Python environment (on this Windows PC)
 
 ```powershell
 .\scripts\setup-venv.ps1
 ```
 
-Then copy `.env.example` to `.env` and fill in:
+Then copy `.env.example` to `.env`. The default `DATABASE_URL` is SQLite (`sqlite:///espressolab.db`)
+— nothing else to set up, tables are created automatically the first time a service runs. Fill in
+the rest:
 
-- `DATABASE_URL` — connection string to the database from step 1, as reachable from this PC.
 - `SECRET_KEY` — any random string (used to sign the "who's selected" cookie).
 - `ADMIN_PASSWORD` — passcode for the `/admin` user-management page (HTTP Basic, username `admin`).
 - Leave `DECAID_*` at their defaults unless you've changed Decaid's ports.
+
+### 2. Using Postgres instead (optional)
+
+Only needed if you want the data on the lab server rather than a local SQLite file (e.g. so
+Grafana on that server can read it directly). Create a database there, then point `DATABASE_URL`
+at it in `.env`:
+
+```
+DATABASE_URL=postgresql://user:pass@lab-server:5432/espressolab
+```
+
+No manual schema step — tables are created automatically here too, the first time the portal or
+logger connects.
 
 ### 3. Decaid
 
@@ -132,8 +131,9 @@ was no picker back then — `drinker_name`/`user_id` will be null for those rows
 
 ## Grafana
 
-Import `dashboards/espressolab-overview.json` into your Grafana (Dashboards → New → Import →
-Upload JSON), pointing it at a Postgres datasource for the `espressolab` database. It includes:
+Needs Postgres (see step 2 above) — Grafana can't read a local SQLite file. Import
+`dashboards/espressolab-overview.json` into your Grafana (Dashboards → New → Import → Upload
+JSON), pointing it at a Postgres datasource for the `espressolab` database. It includes:
 
 - shots today / avg shot duration / most active person this week
 - shots per day, shots per person (30d)
@@ -143,12 +143,12 @@ Upload JSON), pointing it at a Postgres datasource for the `espressolab` databas
 ## Repo layout
 
 ```
-db/schema.sql              database schema (users, shots, shot_samples hypertable)
 espressolab/
-  config.py                env var loading
-  db.py                     asyncpg pool
+  models.py                 schema (users, shots, shot_samples) — auto-creates on startup
+  config.py                 env var loading
+  db.py                     SQLAlchemy async engine (SQLite or Postgres, from DATABASE_URL)
   decaid_client.py          Decaid REST API client
-  ingest.py                 ShotRecord → Postgres rows
+  ingest.py                 ShotRecord → database rows
   logger.py                 WebSocket listener service
   backfill.py               one-off/catch-up ingestion of all shots
   session.py                signed "current user" cookie helpers

@@ -9,7 +9,7 @@ import httpx
 import websockets
 
 from .config import Settings, get_settings
-from .db import get_pool
+from .db import get_engine
 from .decaid_client import DecaidClient
 from .ingest import ingest_shot
 
@@ -36,7 +36,7 @@ async def _fetch_with_retry(client: DecaidClient, shot_id: str) -> dict | None:
     return None
 
 
-async def _handle_event(pool, client: DecaidClient, raw_message: str) -> None:
+async def _handle_event(engine, client: DecaidClient, raw_message: str) -> None:
     try:
         event = json.loads(raw_message)
     except json.JSONDecodeError:
@@ -57,14 +57,14 @@ async def _handle_event(pool, client: DecaidClient, raw_message: str) -> None:
         return
 
     try:
-        await ingest_shot(pool, shot)
+        await ingest_shot(engine, shot)
         log.info("Logged shot %s", shot_id)
     except Exception:
         log.exception("Failed to write shot %s to the database", shot_id)
 
 
 async def run_logger(settings: Settings) -> None:
-    pool = await get_pool(settings)
+    engine = await get_engine(settings)
     client = DecaidClient(settings)
 
     while True:
@@ -73,7 +73,7 @@ async def run_logger(settings: Settings) -> None:
             async with websockets.connect(settings.decaid_ws_url, ping_interval=20) as ws:
                 log.info("Connected. Waiting for shots to finish...")
                 async for raw_message in ws:
-                    await _handle_event(pool, client, raw_message)
+                    await _handle_event(engine, client, raw_message)
         except (websockets.ConnectionClosed, OSError) as exc:
             log.warning("Lost connection to Decaid (%s), retrying in %ss", exc, RECONNECT_DELAY_SECONDS)
             await asyncio.sleep(RECONNECT_DELAY_SECONDS)

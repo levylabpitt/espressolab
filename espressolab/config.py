@@ -40,7 +40,7 @@ class Settings:
 
 def get_settings() -> Settings:
     return Settings(
-        database_url=_env("DATABASE_URL"),
+        database_url=_env("DATABASE_URL", "sqlite:///espressolab.db"),
         decaid_host=_env("DECAID_HOST", "localhost"),
         decaid_rest_port=int(_env("DECAID_REST_PORT", "8080")),
         decaid_ws_port=int(_env("DECAID_WS_PORT", "8080")),
