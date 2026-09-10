@@ -1,6 +1,6 @@
 # Launches everything: Decaid, then the portal + logger, then Edge in kiosk
 # mode pointed at the portal. Meant to run at Windows startup and from the
-# desktop shortcut (both created by install-shortcuts.ps1) — safe to run
+# desktop shortcut (both created by install-shortcuts.ps1) - safe to run
 # again any time (e.g. after a crash) without a reboot.
 
 $ErrorActionPreference = "Stop"
@@ -33,7 +33,7 @@ if (-not (Get-Process -Name "decaid" -ErrorAction SilentlyContinue)) {
         Write-Host "Starting Decaid..."
         Start-Process -FilePath $DecaidExe
     } else {
-        Write-Warning "Decaid.exe not found at $DecaidExe — skipping, start it manually."
+        Write-Warning "Decaid.exe not found at $DecaidExe - skipping, start it manually."
     }
 } else {
     Write-Host "Decaid is already running."
@@ -41,7 +41,7 @@ if (-not (Get-Process -Name "decaid" -ErrorAction SilentlyContinue)) {
 
 Write-Host "Waiting for Decaid's API..."
 if (-not (Wait-ForUrl -Url $DecaidApiUrl -TimeoutSeconds 60)) {
-    Write-Warning "Decaid's API didn't respond within 60s — continuing anyway, the portal will retry on its own."
+    Write-Warning "Decaid's API didn't respond within 60s - continuing anyway, the portal will retry on its own."
 }
 
 # 2. Portal + logger, each backgrounded with output going to a log file

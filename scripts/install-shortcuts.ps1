@@ -1,6 +1,6 @@
 # One-time setup: creates a "Start espressolab" shortcut on the Desktop and
 # an identical one in the Startup folder (so it also runs automatically at
-# login). Both just run start-all.ps1 — safe to re-run this installer any
+# login). Both just run start-all.ps1 - safe to re-run this installer any
 # time, it overwrites the same two shortcuts rather than duplicating them.
 
 $ErrorActionPreference = "Stop"
