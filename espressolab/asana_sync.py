@@ -1,5 +1,5 @@
-"""Pulls a project's members from Asana and adds/updates lab members from
-them: name, email, and profile photo (downloaded locally so page loads don't
+"""Pulls a team's members from Asana and adds/updates lab members from them:
+name, email, and profile photo (downloaded locally so page loads don't
 depend on Asana being reachable, and don't rely on Asana's photo URLs staying
 valid forever).
 
@@ -9,8 +9,8 @@ Matching an Asana member to a users row, in order:
      user instead of creating a duplicate.
   3. otherwise, create a new user.
 
-Never deactivates or deletes anyone who's no longer an Asana project member —
-that stays a manual /admin decision, so nobody unexpectedly vanishes from the
+Never deactivates or deletes anyone who's no longer on the Asana team — that
+stays a manual /admin decision, so nobody unexpectedly vanishes from the
 picker mid-lab-meeting.
 """
 
@@ -32,20 +32,15 @@ AVATARS_DIR = Path(__file__).resolve().parent / "portal" / "static" / "avatars"
 
 
 async def sync_from_asana(engine: AsyncEngine, settings: Settings) -> int:
-    if not settings.asana_token or not settings.asana_project_gid:
-        raise RuntimeError("Set ASANA_TOKEN and ASANA_PROJECT_GID in .env before syncing")
+    if not settings.asana_token or not settings.asana_team_gid:
+        raise RuntimeError("Set ASANA_TOKEN and ASANA_TEAM_GID in .env before syncing")
 
     async with httpx.AsyncClient(
         base_url=ASANA_API_BASE,
         headers={"Authorization": f"Bearer {settings.asana_token}"},
         timeout=20,
     ) as asana:
-        resp = await asana.get(
-            f"/projects/{settings.asana_project_gid}",
-            params={"opt_fields": "members.gid,members.name,members.email,members.photo.image_128x128"},
-        )
-        resp.raise_for_status()
-        members = resp.json()["data"].get("members") or []
+        members = await _fetch_team_members(asana, settings.asana_team_gid)
 
     synced = 0
     async with httpx.AsyncClient(timeout=20) as plain_http:  # no Asana auth header — photo URLs are public
@@ -54,6 +49,21 @@ async def sync_from_asana(engine: AsyncEngine, settings: Settings) -> int:
             synced += 1
 
     return synced
+
+
+async def _fetch_team_members(asana: httpx.AsyncClient, team_gid: str) -> list[dict]:
+    members = []
+    url: str | None = f"/teams/{team_gid}/users"
+    params = {"opt_fields": "gid,name,email,photo.image_128x128", "limit": 100}
+    while url:
+        resp = await asana.get(url, params=params)
+        resp.raise_for_status()
+        body = resp.json()
+        members.extend(body["data"])
+        next_page = body.get("next_page")
+        url = next_page["uri"] if next_page and next_page.get("uri") else None
+        params = None  # next_page.uri already carries the query params
+    return members
 
 
 async def _sync_one_member(engine: AsyncEngine, plain_http: httpx.AsyncClient, member: dict) -> None:

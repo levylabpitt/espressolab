@@ -161,7 +161,7 @@ async def admin_home(request: Request):
         {
             "request": request,
             "users": all_users,
-            "asana_configured": bool(settings.asana_token and settings.asana_project_gid),
+            "asana_configured": bool(settings.asana_token and settings.asana_team_gid),
             "synced": request.query_params.get("synced"),
             "asana_error": request.query_params.get("asana_error"),
         },

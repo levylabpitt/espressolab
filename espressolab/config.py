@@ -25,7 +25,7 @@ class Settings:
     portal_session_idle_minutes: int
     admin_password: str
     asana_token: str
-    asana_project_gid: str
+    asana_team_gid: str
 
     @property
     def decaid_rest_base(self) -> str:
@@ -52,5 +52,5 @@ def get_settings() -> Settings:
         portal_session_idle_minutes=int(_env("PORTAL_SESSION_IDLE_MINUTES", "15")),
         admin_password=_env("ADMIN_PASSWORD", "change-me"),
         asana_token=_env("ASANA_TOKEN", ""),
-        asana_project_gid=_env("ASANA_PROJECT_GID", ""),
+        asana_team_gid=_env("ASANA_TEAM_GID", ""),
     )

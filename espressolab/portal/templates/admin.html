@@ -60,9 +60,9 @@
     <form method="post" action="/admin/sync-asana">
       <input type="submit" value="Sync from Asana" />
     </form>
-    <p class="hint">Adds/updates lab members from the configured Asana project's members (name, email, photo). Never hides or deletes anyone.</p>
+    <p class="hint">Adds/updates lab members from the configured Asana team's members (name, email, photo). Never hides or deletes anyone.</p>
     {% else %}
-    <p class="hint">Set <code>ASANA_TOKEN</code> and <code>ASANA_PROJECT_GID</code> in <code>.env</code> to enable this.</p>
+    <p class="hint">Set <code>ASANA_TOKEN</code> and <code>ASANA_TEAM_GID</code> in <code>.env</code> to enable this.</p>
     {% endif %}
   </div>
 </body>
