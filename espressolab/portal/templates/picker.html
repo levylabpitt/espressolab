@@ -31,5 +31,46 @@
     {% endif %}
   </div>
   <a href="/status" class="status-icon" title="System status" aria-label="System status">&#9881;</a>
+
+  <div id="screensaver-overlay" class="screensaver-overlay">
+    <iframe id="screensaver-frame" title="Screensaver"></iframe>
+    <!-- Iframe content is a separate document — taps inside it never reach our
+         listeners below. This transparent div sits on top and catches them. -->
+    <div class="screensaver-catcher"></div>
+  </div>
+
+  <script>
+    (function () {
+      var IDLE_MS = {{ screensaver_idle_minutes }} * 60 * 1000;
+      var SCREENSAVER_URL = "{{ screensaver_url }}";
+      var overlay = document.getElementById('screensaver-overlay');
+      var frame = document.getElementById('screensaver-frame');
+      var timer;
+
+      function showScreensaver() {
+        frame.src = SCREENSAVER_URL;
+        overlay.classList.add('active');
+      }
+
+      function hideScreensaver() {
+        overlay.classList.remove('active');
+        frame.src = '';
+      }
+
+      function resetTimer() {
+        if (overlay.classList.contains('active')) {
+          hideScreensaver();
+        }
+        clearTimeout(timer);
+        timer = setTimeout(showScreensaver, IDLE_MS);
+      }
+
+      ['mousemove', 'mousedown', 'touchstart', 'keydown', 'scroll'].forEach(function (evt) {
+        document.addEventListener(evt, resetTimer, { passive: true });
+      });
+
+      resetTimer();
+    })();
+  </script>
 </body>
 </html>

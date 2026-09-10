@@ -131,7 +131,15 @@ async def home(request: Request, espressolab_user: str | None = Cookie(default=N
             )
 
     active_users = await get_active_users()
-    return templates.TemplateResponse("picker.html", {"request": request, "users": active_users})
+    return templates.TemplateResponse(
+        "picker.html",
+        {
+            "request": request,
+            "users": active_users,
+            "screensaver_idle_minutes": settings.screensaver_idle_minutes,
+            "screensaver_url": "/static/screensaver/espresso_10.html",
+        },
+    )
 
 
 @app.post("/select/{user_id}")

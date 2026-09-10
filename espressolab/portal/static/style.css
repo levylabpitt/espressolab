@@ -108,6 +108,30 @@ html, body {
   opacity: 1;
 }
 
+.screensaver-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+}
+
+.screensaver-overlay.active {
+  display: block;
+}
+
+.screensaver-overlay iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.screensaver-catcher {
+  position: absolute;
+  inset: 0;
+}
+
 /* --- Brew screen --- */
 
 .brew-bar {

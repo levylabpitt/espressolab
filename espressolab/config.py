@@ -26,6 +26,7 @@ class Settings:
     admin_password: str
     asana_token: str
     asana_team_gid: str
+    screensaver_idle_minutes: int
 
     @property
     def decaid_rest_base(self) -> str:
@@ -53,4 +54,5 @@ def get_settings() -> Settings:
         admin_password=_env("ADMIN_PASSWORD", "change-me"),
         asana_token=_env("ASANA_TOKEN", ""),
         asana_team_gid=_env("ASANA_TEAM_GID", ""),
+        screensaver_idle_minutes=int(_env("SCREENSAVER_IDLE_MINUTES", "10")),
     )
