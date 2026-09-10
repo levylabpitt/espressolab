@@ -9,15 +9,30 @@
 <body>
   <div class="admin">
     <h1>Lab members</h1>
+
+    {% if synced is not none %}
+    <div class="notice notice-ok">Synced {{ synced }} member(s) from Asana.</div>
+    {% endif %}
+    {% if asana_error %}
+    <div class="notice notice-error">Asana sync failed: {{ asana_error }}</div>
+    {% endif %}
+
     <table>
       <thead>
-        <tr><th>Avatar</th><th>Name</th><th>Status</th><th></th></tr>
+        <tr><th>Avatar</th><th>Name</th><th>Email</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
         {% for user in users %}
         <tr>
-          <td><span class="avatar" style="width:34px;height:34px;font-size:1.1rem;background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span></td>
+          <td>
+            {% if user['avatar_image_path'] %}
+            <img class="avatar" style="width:34px;height:34px;" src="{{ user['avatar_image_path'] }}" alt="" />
+            {% else %}
+            <span class="avatar" style="width:34px;height:34px;font-size:1.1rem;background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span>
+            {% endif %}
+          </td>
           <td>{{ user['display_name'] }}</td>
+          <td>{{ user['email'] or '' }}</td>
           <td><span class="badge {{ 'active' if user['active'] else 'inactive' }}">{{ 'active' if user['active'] else 'hidden' }}</span></td>
           <td>
             <form class="inline" method="post" action="/admin/users/{{ user['id'] }}/toggle">
@@ -39,6 +54,16 @@
       <input type="color" name="avatar_color" value="#6f4e37" />
       <input type="submit" value="Add" />
     </form>
+
+    <h2>Sync from Asana</h2>
+    {% if asana_configured %}
+    <form method="post" action="/admin/sync-asana">
+      <input type="submit" value="Sync from Asana" />
+    </form>
+    <p class="hint">Adds/updates lab members from the configured Asana project's members (name, email, photo). Never hides or deletes anyone.</p>
+    {% else %}
+    <p class="hint">Set <code>ASANA_TOKEN</code> and <code>ASANA_PROJECT_GID</code> in <code>.env</code> to enable this.</p>
+    {% endif %}
   </div>
 </body>
 </html>

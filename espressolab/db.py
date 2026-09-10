@@ -1,10 +1,32 @@
-from sqlalchemy import event
+import logging
+
+import sqlalchemy as sa
+from sqlalchemy import event, inspect
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from .config import Settings
 from .models import metadata
 
+log = logging.getLogger("espressolab.db")
+
 _engine: AsyncEngine | None = None
+
+
+def _add_missing_columns(sync_conn) -> None:
+    """Poor-man's migration: metadata.create_all only creates missing
+    *tables*, it never alters ones that already exist. So when a column is
+    added to models.py, add it here too so already-deployed databases pick
+    it up automatically — additive only (new nullable columns), never drops
+    or changes anything, so existing data/rows are untouched."""
+    inspector = inspect(sync_conn)
+    for table in metadata.sorted_tables:
+        existing_columns = {col["name"] for col in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in existing_columns:
+                continue
+            col_type = column.type.compile(dialect=sync_conn.dialect)
+            sync_conn.execute(sa.text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {col_type}'))
+            log.info("Added missing column %s.%s", table.name, column.name)
 
 
 def _normalize_url(raw_url: str) -> str:
@@ -38,6 +60,7 @@ async def get_engine(settings: Settings) -> AsyncEngine:
 
         async with engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
+            await conn.run_sync(_add_missing_columns)
 
         _engine = engine
     return _engine

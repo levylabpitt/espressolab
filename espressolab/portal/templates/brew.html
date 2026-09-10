@@ -9,7 +9,11 @@
 <body>
   <div class="brew-bar">
     <div class="who">
+      {% if user['avatar_image_path'] %}
+      <img class="avatar" src="{{ user['avatar_image_path'] }}" alt="" />
+      {% else %}
       <span class="avatar" style="background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span>
+      {% endif %}
       <span>Brewing as <strong>{{ user['display_name'] }}</strong></span>
     </div>
     <div class="who">

@@ -20,6 +20,9 @@ users = sa.Table(
     sa.Column("display_name", sa.String, nullable=False, unique=True),
     sa.Column("avatar_emoji", sa.String, nullable=False, default="☕"),
     sa.Column("avatar_color", sa.String, nullable=False, default="#6f4e37"),
+    sa.Column("avatar_image_path", sa.String),  # local /static/avatars/... path, e.g. from Asana sync
+    sa.Column("email", sa.String),
+    sa.Column("asana_gid", sa.String, unique=True),  # Asana user gid, set once synced from a project
     sa.Column("active", sa.Boolean, nullable=False, default=True),
     sa.Column("created_at", sa.DateTime, nullable=False, server_default=sa.func.now()),
 )

@@ -10,6 +10,7 @@ leaving this page.
 import logging
 import secrets
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 import sqlalchemy as sa
@@ -19,6 +20,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from ..asana_sync import sync_from_asana
 from ..config import Settings, get_settings
 from ..db import get_engine
 from ..decaid_client import DecaidClient
@@ -154,7 +156,27 @@ async def admin_home(request: Request):
     async with engine.connect() as conn:
         result = await conn.execute(sa.select(users).order_by(users.c.display_name))
         all_users = result.mappings().all()
-    return templates.TemplateResponse("admin.html", {"request": request, "users": all_users})
+    return templates.TemplateResponse(
+        "admin.html",
+        {
+            "request": request,
+            "users": all_users,
+            "asana_configured": bool(settings.asana_token and settings.asana_project_gid),
+            "synced": request.query_params.get("synced"),
+            "asana_error": request.query_params.get("asana_error"),
+        },
+    )
+
+
+@app.post("/admin/sync-asana", dependencies=[Depends(require_admin)])
+async def admin_sync_asana():
+    engine = await get_engine(settings)
+    try:
+        count = await sync_from_asana(engine, settings)
+    except Exception as exc:
+        log.exception("Asana sync failed")
+        return RedirectResponse(url=f"/admin?asana_error={quote(str(exc))}", status_code=303)
+    return RedirectResponse(url=f"/admin?synced={count}", status_code=303)
 
 
 @app.post("/admin/users", dependencies=[Depends(require_admin)])

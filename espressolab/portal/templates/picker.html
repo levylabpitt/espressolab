@@ -14,7 +14,11 @@
       {% for user in users %}
       <form method="post" action="/select/{{ user['id'] }}">
         <button type="submit" class="user-card">
+          {% if user['avatar_image_path'] %}
+          <img class="avatar" src="{{ user['avatar_image_path'] }}" alt="" />
+          {% else %}
           <span class="avatar" style="background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span>
+          {% endif %}
           <span>{{ user['display_name'] }}</span>
         </button>
       </form>
