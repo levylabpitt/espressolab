@@ -30,7 +30,8 @@
     </div>
     {% endif %}
   </div>
-  <a href="/status" class="status-icon" title="System status" aria-label="System status">&#9881;</a>
+  <a href="/status" class="status-icon status-icon-right" title="System status" aria-label="System status">&#9881;</a>
+  <button type="button" id="start-screensaver-btn" class="status-icon status-icon-left" title="Start screensaver" aria-label="Start screensaver">&#127769;</button>
 
   <div id="screensaver-overlay" class="screensaver-overlay">
     <iframe id="screensaver-frame" title="Screensaver"></iframe>
@@ -67,6 +68,11 @@
 
       ['mousemove', 'mousedown', 'touchstart', 'keydown', 'scroll'].forEach(function (evt) {
         document.addEventListener(evt, resetTimer, { passive: true });
+      });
+
+      document.getElementById('start-screensaver-btn').addEventListener('click', function () {
+        clearTimeout(timer);
+        showScreensaver();
       });
 
       resetTimer();
