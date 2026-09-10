@@ -17,7 +17,10 @@
       <span>Brewing as <strong>{{ user['display_name'] }}</strong></span>
     </div>
     <div class="who">
-      <a href="{{ decaid_webui_url }}" target="_blank" rel="noopener" style="color: var(--muted); font-size: 0.9rem;">Open in new window ↗</a>
+      <span class="stats">
+        {{ stats['shot_count'] }} shot{{ '' if stats['shot_count'] == 1 else 's' }}
+        {% if stats['last_profile'] %} · last: {{ stats['last_profile'] }}{% endif %}
+      </span>
       <form method="post" action="/switch">
         <button type="submit">Switch user</button>
       </form>

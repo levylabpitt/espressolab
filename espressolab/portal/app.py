@@ -24,7 +24,7 @@ from ..asana_sync import sync_from_asana
 from ..config import Settings, get_settings
 from ..db import get_engine
 from ..decaid_client import DecaidClient
-from ..models import users
+from ..models import shots, users
 from ..session import make_user_cookie, read_user_cookie
 
 log = logging.getLogger("espressolab.portal")
@@ -96,6 +96,23 @@ async def get_user(user_id: str):
         return result.mappings().first()
 
 
+async def get_user_stats(user_id: str) -> dict:
+    engine = await get_engine(settings)
+    async with engine.connect() as conn:
+        shot_count = (
+            await conn.execute(sa.select(sa.func.count()).select_from(shots).where(shots.c.user_id == user_id))
+        ).scalar_one()
+        last_profile = (
+            await conn.execute(
+                sa.select(shots.c.profile_title)
+                .where(shots.c.user_id == user_id)
+                .order_by(shots.c.started_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    return {"shot_count": shot_count, "last_profile": last_profile}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, espressolab_user: str | None = Cookie(default=None)):
     user_id = read_user_cookie(espressolab_user, settings.portal_session_idle_minutes)
@@ -107,7 +124,7 @@ async def home(request: Request, espressolab_user: str | None = Cookie(default=N
                 {
                     "request": request,
                     "user": user,
-                    "decaid_webui_url": DecaidClient(settings).webui_url,
+                    "stats": await get_user_stats(user_id),
                     "decaid_proxy_url": f"/{DECAID_PROXY_ENTRY}",
                 },
             )

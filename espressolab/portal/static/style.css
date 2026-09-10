@@ -120,8 +120,9 @@ html, body {
   cursor: pointer;
 }
 
-.brew-bar a {
-  font-size: 1.1rem !important;
+.stats {
+  color: var(--muted);
+  font-size: 1.1rem;
 }
 
 iframe.decaid {
