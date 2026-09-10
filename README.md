@@ -90,6 +90,21 @@ picker; the admin passcode only guards the roster itself.
 
 ### 5. Run the services
 
+For day-to-day use on the kiosk PC, set it up to start everything automatically:
+
+```powershell
+.\scripts\install-shortcuts.ps1
+```
+
+This creates a "Start espressolab" shortcut on the Desktop (double-click to launch/relaunch
+everything on demand — handy after a crash, no reboot needed) and an identical one in the Startup
+folder (runs automatically at login). Both run `scripts\start-all.ps1`, which starts Decaid, waits
+for its API, starts the portal and logger (output goes to `logs\*.log`, not a console window), and
+opens Edge in kiosk mode pointed at the portal. Decaid's install path is hardcoded near the top of
+`start-all.ps1` (`C:\Program Files\Decaid\decaid.exe`) — adjust it there if yours differs.
+
+While developing, it's usually easier to run them individually in separate terminals instead:
+
 ```powershell
 # in one window
 .\scripts\start-portal.ps1
@@ -97,13 +112,6 @@ picker; the admin passcode only guards the roster itself.
 # in another window
 .\scripts\start-logger.ps1
 ```
-
-Point the touchscreen's kiosk browser at `http://localhost:5000`.
-
-To run these unattended at boot, the simplest option is
-[NSSM](https://nssm.cc/) — install each as a Windows service pointing at
-`.venv\Scripts\python.exe` with argument `run_portal.py` / `run_logger.py` and working directory
-set to this repo.
 
 ### 6. Backfill existing shot history (optional, one-off)
 
@@ -119,15 +127,15 @@ was no picker back then — `drinker_name`/`user_id` will be null for those rows
 
 ## Troubleshooting
 
-- **Decaid's portal shows blank inside the iframe.** Some browsers/servers refuse to be framed
-  (`X-Frame-Options` / CSP `frame-ancestors`). Decaid's WebUI server is a plain static file
-  server so this is unlikely, but if it happens, use the "Open in new window ↗" link next to
-  "Switch user" as a workaround, or drop the iframe from `brew.html` and just redirect instead.
+- **No console to look at on the kiosk?** Tap the small gear icon in the bottom-right corner of the
+  picker screen (`/status`) — shows whether Decaid's API/WebUI are reachable and whether the
+  logger is actually alive (it writes a heartbeat to the database every 20s; the portal flags it
+  stale/missing if that stops). Also links to `/admin`.
 - **This machine has no Python installed yet.** Install Python 3.11+ (e.g. from
   python.org or `winget install Python.Python.3.12`) before running `scripts\setup-venv.ps1`.
-- **Shots aren't showing up.** Check the logger's console output — it logs every shot it sees
-  finish and any fetch/DB errors. Confirm Decaid's REST API is reachable at
-  `http://localhost:8080/api/v1/machine/info`.
+- **Shots aren't showing up.** Check `logs\logger.log` (or the logger's console if you ran it
+  manually) — it logs every shot it sees finish and any fetch/DB errors. Confirm Decaid's REST API
+  is reachable at `http://localhost:8080/api/v1/machine/info`.
 
 ## Grafana
 
@@ -144,16 +152,19 @@ JSON), pointing it at a Postgres datasource for the `espressolab` database. It i
 
 ```
 espressolab/
-  models.py                 schema (users, shots, shot_samples) — auto-creates on startup
+  models.py                 schema (users, shots, shot_samples, service_heartbeats) — auto-creates on startup
   config.py                 env var loading
   db.py                     SQLAlchemy async engine (SQLite or Postgres, from DATABASE_URL)
   decaid_client.py          Decaid REST API client
   ingest.py                 ShotRecord → database rows
   logger.py                 WebSocket listener service
   backfill.py               one-off/catch-up ingestion of all shots
+  heartbeat.py              lets the logger record "I'm alive" for /status to read
+  asana_sync.py             /admin "Sync from Asana" — pulls team members, name/email/photo
   session.py                signed "current user" cookie helpers
-  portal/                   FastAPI app (picker, embedded Decaid webui, admin)
+  portal/                   FastAPI app (picker, embedded Decaid webui, admin, /status)
 dashboards/                 Grafana dashboard JSON
-scripts/                    PowerShell setup/launch scripts
+scripts/                    PowerShell setup/launch scripts (start-all.ps1 + install-shortcuts.ps1
+                             for kiosk autostart; setup-venv/start-portal/start-logger for dev)
 run_portal.py, run_logger.py, run_backfill.py   entry points
 ```

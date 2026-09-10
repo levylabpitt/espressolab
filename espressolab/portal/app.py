@@ -24,6 +24,7 @@ from ..asana_sync import sync_from_asana
 from ..config import Settings, get_settings
 from ..db import get_engine
 from ..decaid_client import DecaidClient
+from ..heartbeat import get_heartbeat_status
 from ..models import shots, users
 from ..session import make_user_cookie, read_user_cookie
 
@@ -156,6 +157,37 @@ async def switch_user():
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie(USER_COOKIE)
     return response
+
+
+# --- Status: quick on-screen health check, since a kiosk browser hides the --
+# --- console — no other way to tell what's actually running.               -
+
+
+@app.get("/status", response_class=HTMLResponse)
+async def status_page(request: Request):
+    engine = await get_engine(settings)
+    client = DecaidClient(settings)
+
+    decaid_online = False
+    webui_serving = False
+    try:
+        webui_status = await client.get_webui_status()
+        decaid_online = True
+        webui_serving = bool(webui_status.get("serving"))
+    except httpx.HTTPError:
+        pass
+
+    logger = await get_heartbeat_status(engine, "logger")
+
+    return templates.TemplateResponse(
+        "status.html",
+        {
+            "request": request,
+            "decaid_online": decaid_online,
+            "webui_serving": webui_serving,
+            "logger": logger,
+        },
+    )
 
 
 # --- Admin: manage the roster of lab members -------------------------------

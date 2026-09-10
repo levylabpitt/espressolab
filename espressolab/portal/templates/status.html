@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>espressolab status</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="admin">
+    <h1>System status</h1>
+
+    <table>
+      <tbody>
+        <tr>
+          <td>Decaid API</td>
+          <td><span class="badge {{ 'active' if decaid_online else 'inactive' }}">{{ 'online' if decaid_online else 'unreachable' }}</span></td>
+        </tr>
+        <tr>
+          <td>Decaid WebUI (skin embed)</td>
+          <td><span class="badge {{ 'active' if webui_serving else 'inactive' }}">{{ 'serving' if webui_serving else 'not serving' }}</span></td>
+        </tr>
+        <tr>
+          <td>Logger</td>
+          <td>
+            {% if logger['healthy'] %}
+            <span class="badge active">running ({{ logger['seconds_ago'] | round(0) | int }}s ago)</span>
+            {% elif logger['seen'] %}
+            <span class="badge inactive">stale ({{ (logger['seconds_ago'] / 60) | round(0) | int }}m ago)</span>
+            {% else %}
+            <span class="badge inactive">no heartbeat yet</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="hint">
+      "Unreachable"/"not serving" usually means Decaid isn't running yet, or just restarted.
+      A stale or missing logger heartbeat means shots won't be getting logged right now —
+      check its console/log file on this PC.
+    </p>
+
+    <h2>Manage</h2>
+    <p><a href="/admin" style="color: var(--accent);">Lab members / Asana sync &rarr;</a></p>
+
+    <p><a href="/" style="color: var(--muted);">&larr; Back to picker</a></p>
+  </div>
+</body>
+</html>

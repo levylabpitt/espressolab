@@ -90,3 +90,13 @@ shot_samples = sa.Table(
     sa.PrimaryKeyConstraint("shot_id", "sample_time", "seq"),
     sa.Index("idx_espresso_shot_samples_shot_id", "shot_id"),
 )
+
+# One row per background service (currently just "logger"), updated
+# periodically so the portal's /status page can tell whether a *separate*
+# process is actually alive — it has no other way to see that.
+service_heartbeats = sa.Table(
+    "espresso_service_heartbeats",
+    metadata,
+    sa.Column("service", sa.String, primary_key=True),
+    sa.Column("last_seen", sa.DateTime, nullable=False),
+)

@@ -14,6 +14,7 @@ from .backfill import catch_up
 from .config import Settings, get_settings
 from .db import get_engine
 from .decaid_client import DecaidClient
+from .heartbeat import write_heartbeat
 from .ingest import ingest_shot
 
 log = logging.getLogger("espressolab.logger")
@@ -21,6 +22,9 @@ log = logging.getLogger("espressolab.logger")
 RECONNECT_DELAY_SECONDS = 5
 FETCH_RETRY_ATTEMPTS = 5
 FETCH_RETRY_DELAY_SECONDS = 1
+
+# So the portal's /status page can tell this process is actually alive.
+HEARTBEAT_INTERVAL_SECONDS = 20
 
 # Belt-and-suspenders recovery: independent of the live WebSocket listener
 # above, periodically re-check Decaid's own recent shot history and re-ingest
@@ -125,11 +129,21 @@ async def _catchup_loop(engine, client: DecaidClient, settings: Settings) -> Non
             log.exception("Catch-up sweep failed, will retry in %ss", CATCHUP_INTERVAL_SECONDS)
 
 
+async def _heartbeat_loop(engine) -> None:
+    while True:
+        try:
+            await write_heartbeat(engine, "logger")
+        except Exception:
+            log.exception("Could not write heartbeat")
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
+
 async def run_logger(settings: Settings) -> None:
     engine = await get_engine(settings)
     client = DecaidClient(settings)
 
     asyncio.create_task(_catchup_loop(engine, client, settings))
+    asyncio.create_task(_heartbeat_loop(engine))
 
     while True:
         try:
