@@ -5,6 +5,8 @@ import re
 from datetime import datetime, timezone
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from .models import shot_samples, shots, users
@@ -75,40 +77,50 @@ async def ingest_shot(engine: AsyncEngine, shot: dict) -> str:
     async with engine.begin() as conn:
         user_id = await _resolve_user_id(conn, extras=extras, drinker_name=context.get("drinkerName"))
 
-        # Delete-then-insert instead of an upsert: keeps this portable across
-        # SQLite and Postgres. ON DELETE CASCADE takes shot_samples with it.
-        await conn.execute(sa.delete(shots).where(shots.c.id == shot_id))
-
-        await conn.execute(
-            sa.insert(shots).values(
-                id=shot_id,
-                user_id=user_id,
-                drinker_name=context.get("drinkerName"),
-                barista_name=context.get("baristaName"),
-                started_at=started_at,
-                created_at_decaid=_parse_dt(shot.get("createdAt")),
-                updated_at_decaid=_parse_dt(shot.get("updatedAt")),
-                duration_seconds=duration_seconds,
-                stop_reason=shot.get("stopReason"),
-                profile_title=profile.get("title"),
-                target_dose_weight=context.get("targetDoseWeight"),
-                target_yield=context.get("targetYield"),
-                grinder_model=context.get("grinderModel"),
-                grinder_setting=context.get("grinderSetting"),
-                grinder_id=context.get("grinderId"),
-                coffee_name=context.get("coffeeName"),
-                coffee_roaster=context.get("coffeeRoaster"),
-                bean_batch_id=context.get("beanBatchId"),
-                actual_dose_weight=annotations.get("actualDoseWeight"),
-                actual_yield=annotations.get("actualYield"),
-                drink_tds=annotations.get("drinkTds"),
-                drink_ey=annotations.get("drinkEy"),
-                enjoyment=annotations.get("enjoyment"),
-                espresso_notes=annotations.get("espressoNotes"),
-                raw_workflow=workflow,
-                raw_annotations=annotations,
-            )
+        values = dict(
+            user_id=user_id,
+            drinker_name=context.get("drinkerName"),
+            barista_name=context.get("baristaName"),
+            started_at=started_at,
+            created_at_decaid=_parse_dt(shot.get("createdAt")),
+            updated_at_decaid=_parse_dt(shot.get("updatedAt")),
+            duration_seconds=duration_seconds,
+            stop_reason=shot.get("stopReason"),
+            profile_title=profile.get("title"),
+            target_dose_weight=context.get("targetDoseWeight"),
+            target_yield=context.get("targetYield"),
+            grinder_model=context.get("grinderModel"),
+            grinder_setting=context.get("grinderSetting"),
+            grinder_id=context.get("grinderId"),
+            coffee_name=context.get("coffeeName"),
+            coffee_roaster=context.get("coffeeRoaster"),
+            bean_batch_id=context.get("beanBatchId"),
+            actual_dose_weight=annotations.get("actualDoseWeight"),
+            actual_yield=annotations.get("actualYield"),
+            drink_tds=annotations.get("drinkTds"),
+            drink_ey=annotations.get("drinkEy"),
+            enjoyment=annotations.get("enjoyment"),
+            espresso_notes=annotations.get("espressoNotes"),
+            raw_workflow=workflow,
+            raw_annotations=annotations,
         )
+
+        # A real upsert, not delete-then-insert: a shot gets re-ingested
+        # whenever Decaid reports new annotations for it (e.g. the drinker
+        # weighs the cup after the pour), and espresso_shot_feedback has
+        # ON DELETE CASCADE on shot_id — deleting the shots row, even to
+        # immediately reinsert it, would silently wipe any rating already
+        # given for it.
+        insert_fn = pg_insert if engine.dialect.name == "postgresql" else sqlite_insert
+        stmt = insert_fn(shots).values(id=shot_id, **values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["id"], set_={col: getattr(stmt.excluded, col) for col in values}
+        )
+        await conn.execute(stmt)
+
+        # Samples have no children referencing them, so a full replace here
+        # is still fine (and needed, since re-ingest can add/change samples).
+        await conn.execute(sa.delete(shot_samples).where(shot_samples.c.shot_id == shot_id))
 
         rows = []
         base_time = sample_times[0] if sample_times else started_at
