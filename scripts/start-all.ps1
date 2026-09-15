@@ -27,6 +27,16 @@ function Wait-ForUrl {
     return $false
 }
 
+# Get-Process doesn't expose CommandLine on Windows PowerShell 5.1, and the
+# portal/logger don't bind a distinctive port we could check instead - so
+# match on the launched script name via WMI.
+function Test-ScriptRunning {
+    param([string]$ScriptName)
+    $match = Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+        Where-Object { $_.CommandLine -match [regex]::Escape($ScriptName) }
+    return $null -ne $match
+}
+
 # 1. Decaid
 if (-not (Get-Process -Name "decaid" -ErrorAction SilentlyContinue)) {
     if (Test-Path $DecaidExe) {
@@ -46,17 +56,25 @@ if (-not (Wait-ForUrl -Url $DecaidApiUrl -TimeoutSeconds 60)) {
 
 # 2. Portal + logger, each backgrounded with output going to a log file
 # instead of a console window (nothing to look at on a kiosk anyway).
-Write-Host "Starting the portal..."
-Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "run_portal.py" `
-    -WorkingDirectory $RepoRoot -WindowStyle Hidden `
-    -RedirectStandardOutput (Join-Path $LogDir "portal.log") `
-    -RedirectStandardError (Join-Path $LogDir "portal.err.log")
+if (Test-ScriptRunning "run_portal.py") {
+    Write-Host "Portal is already running."
+} else {
+    Write-Host "Starting the portal..."
+    Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "run_portal.py" `
+        -WorkingDirectory $RepoRoot -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $LogDir "portal.log") `
+        -RedirectStandardError (Join-Path $LogDir "portal.err.log")
+}
 
-Write-Host "Starting the logger..."
-Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "run_logger.py" `
-    -WorkingDirectory $RepoRoot -WindowStyle Hidden `
-    -RedirectStandardOutput (Join-Path $LogDir "logger.log") `
-    -RedirectStandardError (Join-Path $LogDir "logger.err.log")
+if (Test-ScriptRunning "run_logger.py") {
+    Write-Host "Logger is already running."
+} else {
+    Write-Host "Starting the logger..."
+    Start-Process -FilePath ".\.venv\Scripts\python.exe" -ArgumentList "run_logger.py" `
+        -WorkingDirectory $RepoRoot -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $LogDir "logger.log") `
+        -RedirectStandardError (Join-Path $LogDir "logger.err.log")
+}
 
 Write-Host "Waiting for the portal to come up..."
 Wait-ForUrl -Url $PortalUrl -TimeoutSeconds 30 | Out-Null
