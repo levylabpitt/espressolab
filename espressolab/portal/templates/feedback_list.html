@@ -17,7 +17,7 @@
       <span>Feedback for <strong>{{ user['display_name'] }}</strong></span>
     </div>
     <div class="who">
-      <a href="/"><button type="button">Done</button></a>
+      <a href="/" id="done-link"><button type="button">Done</button></a>
     </div>
   </div>
 
@@ -45,5 +45,18 @@
     <div class="empty-state">No shots yet.</div>
     {% endif %}
   </div>
+
+  <script>
+    // When opened from the brew screen this page lives inside an overlay
+    // iframe (so the Decaid iframe underneath never reloads/disconnects).
+    // "Done" should just close that overlay, not navigate the iframe itself
+    // to "/" — it's only a real top-level link when reached standalone.
+    document.getElementById('done-link').addEventListener('click', function (e) {
+      if (window.parent !== window) {
+        e.preventDefault();
+        window.parent.postMessage({ type: 'espressolab-feedback-close' }, window.location.origin);
+      }
+    });
+  </script>
 </body>
 </html>

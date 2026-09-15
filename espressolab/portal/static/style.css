@@ -123,18 +123,21 @@ html, body {
   opacity: 1;
 }
 
-.screensaver-overlay {
+.screensaver-overlay,
+.feedback-overlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
   display: none;
 }
 
-.screensaver-overlay.active {
+.screensaver-overlay.active,
+.feedback-overlay.active {
   display: block;
 }
 
-.screensaver-overlay iframe {
+.screensaver-overlay iframe,
+.feedback-overlay iframe {
   position: absolute;
   inset: 0;
   width: 100%;

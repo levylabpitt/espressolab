@@ -21,13 +21,17 @@
         {{ stats['shot_count'] }} shot{{ '' if stats['shot_count'] == 1 else 's' }}
         {% if stats['last_profile'] %} · last: {{ stats['last_profile'] }}{% endif %}
       </span>
-      <a href="/feedback"><button type="button" class="btn-secondary">Give feedback</button></a>
+      <button type="button" id="feedback-btn" class="btn-secondary">Give feedback</button>
       <form method="post" action="/switch">
         <button type="submit">Switch user</button>
       </form>
     </div>
   </div>
   <iframe class="decaid" src="{{ decaid_proxy_url }}"></iframe>
+
+  <div id="feedback-overlay" class="feedback-overlay">
+    <iframe id="feedback-frame" title="Feedback"></iframe>
+  </div>
 
   <script>
     // The server only re-checks the session cookie when a request hits "/" —
@@ -36,6 +40,29 @@
     setTimeout(function () {
       window.location.href = '/';
     }, {{ session_seconds_remaining }} * 1000);
+
+    // Feedback opens in an overlay iframe rather than navigating away —
+    // navigating brew.html itself would tear down the Decaid iframe above
+    // and its live connection to the machine, which then has to reconnect
+    // from scratch (briefly showing "disconnected").
+    (function () {
+      var btn = document.getElementById('feedback-btn');
+      var overlay = document.getElementById('feedback-overlay');
+      var frame = document.getElementById('feedback-frame');
+
+      btn.addEventListener('click', function () {
+        frame.src = '/feedback';
+        overlay.classList.add('active');
+      });
+
+      window.addEventListener('message', function (event) {
+        if (event.origin !== window.location.origin) return;
+        if (event.data && event.data.type === 'espressolab-feedback-close') {
+          overlay.classList.remove('active');
+          frame.src = '';
+        }
+      });
+    })();
   </script>
 </body>
 </html>
