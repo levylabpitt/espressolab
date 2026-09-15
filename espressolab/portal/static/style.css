@@ -180,6 +180,12 @@ html, body {
   cursor: pointer;
 }
 
+.brew-bar button.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
 .stats {
   color: var(--muted);
   font-size: 1.1rem;

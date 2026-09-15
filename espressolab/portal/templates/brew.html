@@ -21,6 +21,7 @@
         {{ stats['shot_count'] }} shot{{ '' if stats['shot_count'] == 1 else 's' }}
         {% if stats['last_profile'] %} · last: {{ stats['last_profile'] }}{% endif %}
       </span>
+      <a href="/feedback"><button type="button" class="btn-secondary">Give feedback</button></a>
       <form method="post" action="/switch">
         <button type="submit">Switch user</button>
       </form>
