@@ -25,7 +25,7 @@ from ..config import Settings, get_settings
 from ..db import get_engine
 from ..decaid_client import DecaidClient
 from ..heartbeat import get_heartbeat_status
-from ..models import shots, users
+from ..models import shot_feedback, shots, users
 from ..session import cookie_seconds_remaining, make_user_cookie, read_user_cookie
 
 log = logging.getLogger("espressolab.portal")
@@ -40,6 +40,11 @@ settings: Settings = get_settings()
 basic_auth = HTTPBasic()
 
 USER_COOKIE = "espressolab_user"
+
+FLAVOR_TAGS = [
+    "Fruity", "Floral", "Chocolatey", "Nutty", "Caramel", "Sweet",
+    "Sour", "Bitter", "Balanced", "Syrupy", "Watery", "Burnt",
+]
 
 # Decaid's WebUI sends X-Frame-Options: SAMEORIGIN, which blocks framing it
 # from our own origin (different port = different origin). So instead of
@@ -174,6 +179,145 @@ async def switch_user():
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie(USER_COOKIE)
     return response
+
+
+# --- Feedback: rate a past shot from a flavor tag wheel ---------------------
+
+
+async def get_recent_shots_for_user(user_id: str, limit: int = 10):
+    engine = await get_engine(settings)
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            sa.select(
+                shots.c.id,
+                shots.c.started_at,
+                shots.c.profile_title,
+                shots.c.actual_dose_weight,
+                shots.c.actual_yield,
+                shot_feedback.c.overall_rating,
+            )
+            .select_from(
+                shots.outerjoin(
+                    shot_feedback,
+                    sa.and_(shot_feedback.c.shot_id == shots.c.id, shot_feedback.c.user_id == user_id),
+                )
+            )
+            .where(shots.c.user_id == user_id)
+            .order_by(shots.c.started_at.desc())
+            .limit(limit)
+        )
+        return result.mappings().all()
+
+
+async def get_shot_for_user(shot_id: str, user_id: str):
+    engine = await get_engine(settings)
+    async with engine.connect() as conn:
+        shot = (
+            await conn.execute(sa.select(shots).where(shots.c.id == shot_id, shots.c.user_id == user_id))
+        ).mappings().first()
+        if not shot:
+            return None, None
+        feedback = (
+            await conn.execute(
+                sa.select(shot_feedback).where(
+                    shot_feedback.c.shot_id == shot_id, shot_feedback.c.user_id == user_id
+                )
+            )
+        ).mappings().first()
+        return shot, feedback
+
+
+@app.get("/feedback", response_class=HTMLResponse)
+async def feedback_home(request: Request, espressolab_user: str | None = Cookie(default=None)):
+    user_id = read_user_cookie(espressolab_user, settings.portal_session_idle_minutes)
+    if not user_id:
+        active_users = await get_active_users()
+        return templates.TemplateResponse(
+            "picker.html",
+            {
+                "request": request,
+                "users": active_users,
+                "screensaver_idle_minutes": settings.screensaver_idle_minutes,
+                "screensaver_url": "/static/screensaver/espresso_10.html",
+                "feedback_mode": True,
+            },
+        )
+
+    user = await get_user(user_id)
+    if not user:
+        response = RedirectResponse(url="/feedback", status_code=303)
+        response.delete_cookie(USER_COOKIE)
+        return response
+
+    return templates.TemplateResponse(
+        "feedback_list.html",
+        {"request": request, "user": user, "shots": await get_recent_shots_for_user(user_id)},
+    )
+
+
+@app.post("/feedback/identify/{user_id}")
+async def feedback_identify(user_id: str):
+    user = await get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Unknown user")
+    response = RedirectResponse(url="/feedback", status_code=303)
+    response.set_cookie(USER_COOKIE, make_user_cookie(str(user["id"])), max_age=60 * 60 * 12, httponly=True)
+    return response
+
+
+@app.get("/feedback/{shot_id}", response_class=HTMLResponse)
+async def feedback_form(request: Request, shot_id: str, espressolab_user: str | None = Cookie(default=None)):
+    user_id = read_user_cookie(espressolab_user, settings.portal_session_idle_minutes)
+    if not user_id:
+        return RedirectResponse(url="/feedback", status_code=303)
+
+    shot, feedback = await get_shot_for_user(shot_id, user_id)
+    if not shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+
+    return templates.TemplateResponse(
+        "feedback_form.html",
+        {
+            "request": request,
+            "shot": shot,
+            "feedback": feedback,
+            "flavor_tags": FLAVOR_TAGS,
+            "selected_tags": set((feedback or {}).get("flavor_tags") or []),
+        },
+    )
+
+
+@app.post("/feedback/{shot_id}")
+async def feedback_submit(
+    shot_id: str,
+    espressolab_user: str | None = Cookie(default=None),
+    overall_rating: int = Form(...),
+    flavor_tags: list[str] = Form([]),
+    notes: str = Form(""),
+):
+    user_id = read_user_cookie(espressolab_user, settings.portal_session_idle_minutes)
+    if not user_id:
+        return RedirectResponse(url="/feedback", status_code=303)
+
+    shot, _ = await get_shot_for_user(shot_id, user_id)
+    if not shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+
+    engine = await get_engine(settings)
+    async with engine.begin() as conn:
+        await conn.execute(
+            sa.delete(shot_feedback).where(shot_feedback.c.shot_id == shot_id, shot_feedback.c.user_id == user_id)
+        )
+        await conn.execute(
+            sa.insert(shot_feedback).values(
+                shot_id=shot_id,
+                user_id=user_id,
+                overall_rating=overall_rating,
+                flavor_tags=flavor_tags,
+                notes=notes.strip() or None,
+            )
+        )
+    return RedirectResponse(url="/feedback", status_code=303)
 
 
 # --- Status: quick on-screen health check, since a kiosk browser hides the --

@@ -114,6 +114,11 @@ html, body {
   left: 18px;
 }
 
+.status-icon-center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .status-icon:active {
   opacity: 1;
 }
@@ -185,6 +190,129 @@ iframe.decaid {
   width: 100%;
   height: calc(100vh - 92px);
   display: block;
+}
+
+/* --- Feedback screens --- */
+
+.feedback-list {
+  height: calc(100vh - 92px);
+  overflow-y: auto;
+  padding: 20px 30px;
+}
+
+.shot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.shot-row-title {
+  font-size: 1.3rem;
+}
+
+.shot-row-meta {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-top: 4px;
+}
+
+.shot-row-rating {
+  color: var(--accent);
+  font-size: 1.4rem;
+  white-space: nowrap;
+}
+
+.shot-row-rating.unrated {
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.feedback-form {
+  height: calc(100vh - 92px);
+  overflow-y: auto;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+.stars {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 8px;
+}
+
+.stars input {
+  display: none;
+}
+
+.stars label {
+  font-size: 3rem;
+  color: #4a3a2c;
+  cursor: pointer;
+}
+
+.stars input:checked ~ label,
+.stars label:hover,
+.stars label:hover ~ label {
+  color: var(--accent);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  max-width: 700px;
+}
+
+.chip input {
+  display: none;
+}
+
+.chip span {
+  display: inline-block;
+  padding: 14px 22px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.chip input:checked + span {
+  background: var(--accent);
+  color: #14100c;
+}
+
+.feedback-notes {
+  width: 100%;
+  max-width: 700px;
+  min-height: 90px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #3a2c22;
+  background: #14100c;
+  color: var(--text);
+  font-size: 1.1rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.feedback-submit {
+  background: var(--accent);
+  border: none;
+  border-radius: 14px;
+  padding: 18px 40px;
+  font-size: 1.4rem;
+  cursor: pointer;
 }
 
 /* --- Admin screen --- */

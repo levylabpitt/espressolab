@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>espressolab</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="brew-bar">
+    <div class="who">
+      <span>{{ shot['profile_title'] or 'Shot' }} &middot; {{ shot['started_at'].strftime('%b %d, %H:%M') if shot['started_at'] else '' }}</span>
+    </div>
+    <div class="who">
+      <a href="/feedback"><button type="button">Back</button></a>
+    </div>
+  </div>
+
+  <form method="post" action="/feedback/{{ shot['id'] }}" class="feedback-form">
+    <div class="stars">
+      {% for n in range(5, 0, -1) %}
+      <input type="radio" name="overall_rating" id="star{{ n }}" value="{{ n }}" {% if feedback and feedback['overall_rating'] == n %}checked{% endif %} required />
+      <label for="star{{ n }}">&#9733;</label>
+      {% endfor %}
+    </div>
+
+    <div class="chips">
+      {% for tag in flavor_tags %}
+      <label class="chip">
+        <input type="checkbox" name="flavor_tags" value="{{ tag }}" {% if tag in selected_tags %}checked{% endif %} />
+        <span>{{ tag }}</span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <textarea name="notes" class="feedback-notes" placeholder="Anything else? (optional)">{{ feedback['notes'] if feedback else '' }}</textarea>
+
+    <button type="submit" class="feedback-submit">Save feedback</button>
+  </form>
+</body>
+</html>

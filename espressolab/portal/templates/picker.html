@@ -8,11 +8,11 @@
 </head>
 <body>
   <div class="picker">
-    <h1>Who's brewing?</h1>
+    <h1>{% if feedback_mode %}Who's giving feedback?{% else %}Who's brewing?{% endif %}</h1>
     {% if users %}
     <div class="grid">
       {% for user in users %}
-      <form method="post" action="/select/{{ user['id'] }}">
+      <form method="post" action="{% if feedback_mode %}/feedback/identify/{{ user['id'] }}{% else %}/select/{{ user['id'] }}{% endif %}">
         <button type="submit" class="user-card">
           {% if user['avatar_image_path'] %}
           <img class="avatar" src="{{ user['avatar_image_path'] }}" alt="" />
@@ -30,8 +30,13 @@
     </div>
     {% endif %}
   </div>
+  {% if feedback_mode %}
+  <a href="/" class="status-icon status-icon-left" title="Back" aria-label="Back">&#8592;</a>
+  {% else %}
   <a href="/status" class="status-icon status-icon-right" title="System status" aria-label="System status">&#9881;</a>
   <button type="button" id="start-screensaver-btn" class="status-icon status-icon-left" title="Start screensaver" aria-label="Start screensaver">&#127769;</button>
+  <a href="/feedback" class="status-icon status-icon-center" title="Give feedback" aria-label="Give feedback">&#11088;</a>
+  {% endif %}
 
   <div id="screensaver-overlay" class="screensaver-overlay">
     <iframe id="screensaver-frame" title="Screensaver"></iframe>
@@ -70,10 +75,13 @@
         document.addEventListener(evt, resetTimer, { passive: true });
       });
 
-      document.getElementById('start-screensaver-btn').addEventListener('click', function () {
-        clearTimeout(timer);
-        showScreensaver();
-      });
+      var screensaverBtn = document.getElementById('start-screensaver-btn');
+      if (screensaverBtn) {
+        screensaverBtn.addEventListener('click', function () {
+          clearTimeout(timer);
+          showScreensaver();
+        });
+      }
 
       resetTimer();
     })();

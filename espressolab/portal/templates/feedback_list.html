@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>espressolab</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="brew-bar">
+    <div class="who">
+      {% if user['avatar_image_path'] %}
+      <img class="avatar" src="{{ user['avatar_image_path'] }}" alt="" />
+      {% else %}
+      <span class="avatar" style="background: {{ user['avatar_color'] }};">{{ user['avatar_emoji'] }}</span>
+      {% endif %}
+      <span>Feedback for <strong>{{ user['display_name'] }}</strong></span>
+    </div>
+    <div class="who">
+      <a href="/"><button type="button">Done</button></a>
+    </div>
+  </div>
+
+  <div class="feedback-list">
+    {% if shots %}
+    {% for shot in shots %}
+    <a class="shot-row" href="/feedback/{{ shot['id'] }}">
+      <div>
+        <div class="shot-row-title">{{ shot['profile_title'] or 'Shot' }}</div>
+        <div class="shot-row-meta">
+          {{ shot['started_at'].strftime('%b %d, %H:%M') if shot['started_at'] else '' }}
+          {% if shot['actual_dose_weight'] and shot['actual_yield'] %}
+          &middot; {{ '%.1f'|format(shot['actual_dose_weight']) }}g &rarr; {{ '%.1f'|format(shot['actual_yield']) }}g
+          {% endif %}
+        </div>
+      </div>
+      {% if shot['overall_rating'] %}
+      <span class="shot-row-rating">{{ '★' * shot['overall_rating'] }}{{ '☆' * (5 - shot['overall_rating']) }}</span>
+      {% else %}
+      <span class="shot-row-rating unrated">Rate it</span>
+      {% endif %}
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state">No shots yet.</div>
+    {% endif %}
+  </div>
+</body>
+</html>

@@ -91,6 +91,21 @@ shot_samples = sa.Table(
     sa.Index("idx_espresso_shot_samples_shot_id", "shot_id"),
 )
 
+# One row per (shot, user) feedback submission. A shot can only be rated by
+# the person who drank it, so this is scoped to user_id as well as shot_id —
+# re-submitting overwrites the previous rating (delete-then-insert, same as shots).
+shot_feedback = sa.Table(
+    "espresso_shot_feedback",
+    metadata,
+    sa.Column("shot_id", sa.String, sa.ForeignKey("espresso_shots.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("user_id", sa.String, sa.ForeignKey("espresso_users.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("overall_rating", sa.Integer, nullable=False),
+    sa.Column("flavor_tags", sa.JSON, nullable=False, default=list),
+    sa.Column("notes", sa.Text),
+    sa.Column("created_at", sa.DateTime, nullable=False, server_default=sa.func.now()),
+    sa.PrimaryKeyConstraint("shot_id", "user_id"),
+)
+
 # One row per background service (currently just "logger"), updated
 # periodically so the portal's /status page can tell whether a *separate*
 # process is actually alive — it has no other way to see that.
