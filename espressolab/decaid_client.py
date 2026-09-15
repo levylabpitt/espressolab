@@ -34,6 +34,28 @@ class DecaidClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def get_machine_state(self) -> dict:
+        async with httpx.AsyncClient(base_url=self._base, timeout=5) as client:
+            resp = await client.get("/api/v1/machine/state")
+            resp.raise_for_status()
+            return resp.json()
+
+    async def wake_if_sleeping(self) -> bool:
+        """Nudges the machine to `idle` if it's currently `sleeping`. Returns
+        True if a wake request was actually sent. Deliberately checks first
+        rather than always forcing `idle` — if the machine happens to be mid
+        shot/steam/clean for some other reason, we don't want to interrupt
+        that just because someone tapped their profile."""
+        snapshot = await self.get_machine_state()
+        current = (snapshot.get("state") or {}).get("state")
+        if current != "sleeping":
+            return False
+
+        async with httpx.AsyncClient(base_url=self._base, timeout=10) as client:
+            resp = await client.put("/api/v1/machine/state/idle")
+            resp.raise_for_status()
+        return True
+
     async def get_webui_status(self) -> dict:
         async with httpx.AsyncClient(base_url=self._base, timeout=5) as client:
             resp = await client.get("/api/v1/webui/server/status")

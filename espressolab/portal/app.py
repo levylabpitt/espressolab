@@ -158,6 +158,12 @@ async def select_user(user_id: str):
         log.exception("Could not tag Decaid workflow for user %s", user["display_name"])
         # Still let them through — the shot will just land unattributed.
 
+    try:
+        if await client.wake_if_sleeping():
+            log.info("Woke the machine for %s", user["display_name"])
+    except httpx.HTTPError:
+        log.exception("Could not check/wake machine state for %s", user["display_name"])
+
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(USER_COOKIE, make_user_cookie(str(user["id"])), max_age=60 * 60 * 12, httponly=True)
     return response
