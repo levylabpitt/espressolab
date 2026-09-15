@@ -26,7 +26,7 @@ from ..db import get_engine
 from ..decaid_client import DecaidClient
 from ..heartbeat import get_heartbeat_status
 from ..models import shots, users
-from ..session import make_user_cookie, read_user_cookie
+from ..session import cookie_seconds_remaining, make_user_cookie, read_user_cookie
 
 log = logging.getLogger("espressolab.portal")
 
@@ -127,6 +127,9 @@ async def home(request: Request, espressolab_user: str | None = Cookie(default=N
                     "user": user,
                     "stats": await get_user_stats(user_id),
                     "decaid_proxy_url": f"/{DECAID_PROXY_ENTRY}",
+                    "session_seconds_remaining": cookie_seconds_remaining(
+                        espressolab_user, settings.portal_session_idle_minutes
+                    ),
                 },
             )
 

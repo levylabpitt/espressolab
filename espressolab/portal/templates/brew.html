@@ -27,5 +27,14 @@
     </div>
   </div>
   <iframe class="decaid" src="{{ decaid_proxy_url }}"></iframe>
+
+  <script>
+    // The server only re-checks the session cookie when a request hits "/" —
+    // nothing else here ever navigates back on its own, so without this the
+    // brew screen would just sit here forever once the session has expired.
+    setTimeout(function () {
+      window.location.href = '/';
+    }, {{ session_seconds_remaining }} * 1000);
+  </script>
 </body>
 </html>

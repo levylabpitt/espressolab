@@ -40,3 +40,19 @@ def read_user_cookie(cookie_value: str | None, idle_minutes: int) -> str | None:
     if time.time() - selected_at > idle_minutes * 60:
         return None
     return user_id
+
+
+def cookie_seconds_remaining(cookie_value: str | None, idle_minutes: int) -> float | None:
+    """How much longer this cookie has before read_user_cookie would reject
+    it — used to schedule the brew screen's auto-return-to-picker timer at
+    the correct remaining time, not a full fresh window, in case the page
+    happens to reload partway through a session."""
+    raw = unsign(cookie_value)
+    if not raw or ":" not in raw:
+        return None
+    _, _, selected_at = raw.rpartition(":")
+    try:
+        selected_at = int(selected_at)
+    except ValueError:
+        return None
+    return max(idle_minutes * 60 - (time.time() - selected_at), 0)
